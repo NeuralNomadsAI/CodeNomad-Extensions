@@ -1,0 +1,23 @@
+{
+  "schemaVersion": 1,
+  "extensions": [
+    {
+      "manifest": {
+        "id": "neuralnomads.session-info",
+        "name": "Session info",
+        "version": "1.0.0",
+        "apiVersion": 1,
+        "author": "NeuralNomadsAI",
+        "license": "MIT",
+        "repository": "https://github.com/NeuralNomadsAI/CodeNomad-Extensions",
+        "permissions": ["session.context"]
+      },
+      "description": "Minimal distribution demo: displays the active session identifier and follows language and appearance. Not an assets gallery.",
+      "digest": "cf80226a40dd077a6a8cc2a4b65bbb46bf33619d62007982bd7dcea34ae4545f",
+      "release": {
+        "tag": "session-info-v1.0.0",
+        "asset": "neuralnomads.session-info-1.0.0.zip"
+      }
+    }
+  ]
+}
