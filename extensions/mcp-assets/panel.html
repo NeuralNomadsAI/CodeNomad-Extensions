@@ -1,0 +1,174 @@
+<!-- MIT License — Copyright (c) 2026 NeuralNomadsAI
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+The above copyright notice and this permission notice shall be included in
+all copies or substantial portions of the Software.
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
+THE SOFTWARE. -->
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<style>
+  :root { color-scheme: light; --bg:#f7f8fa; --tile:#edf0f4; --ink:#232a36; --muted:#626e80; --line:#cdd4df; --focus:#336cb7; font:13px system-ui,sans-serif; }
+  :root[data-appearance=dark] { color-scheme:dark; --bg:#1d2430; --tile:#252f3d; --ink:#e0e7f1; --muted:#a1aec0; --line:#3b485c; --focus:#83b6ef; }
+  * { box-sizing:border-box; border-radius:0; }
+  html, body { background:var(--bg); }
+  body { margin:0; padding:12px; color:var(--ink); }
+  header { display:flex; align-items:center; gap:8px; margin-bottom:12px; }
+  h1 { font-size:13px; margin:0; font-weight:600; }
+  #count { flex:1; color:var(--muted); font:11px ui-monospace,monospace; }
+  button { border:1px solid var(--line); background:transparent; color:inherit; min-height:28px; padding:4px 8px; cursor:pointer; font:inherit; }
+  button:focus-visible { outline:2px solid var(--focus); outline-offset:2px; }
+  button:disabled { opacity:.5; cursor:default; }
+  #grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(min(120px,100%),1fr)); gap:8px; }
+  .asset { text-align:start; padding:0; min-width:0; overflow:hidden; }
+  .preview { display:flex; align-items:center; justify-content:center; aspect-ratio:1; background:var(--tile); overflow:hidden; }
+  .preview img { width:100%; height:100%; object-fit:contain; }
+  .file { color:var(--muted); font:12px ui-monospace,monospace; overflow-wrap:anywhere; padding:12px; text-align:center; }
+  .caption { display:block; padding:8px; }
+  .caption span { display:block; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  .caption small { display:block; margin-top:3px; color:var(--muted); font:10px ui-monospace,monospace; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  #status { color:var(--muted); line-height:1.5; }
+  footer { display:flex; justify-content:space-between; gap:8px; margin-top:12px; }
+  dialog { width:calc(100% - 16px); max-width:none; max-height:calc(100% - 16px); padding:12px; border:1px solid var(--line); background:var(--bg); color:var(--ink); }
+  dialog::backdrop { background:#0009; }
+  dialog header { position:sticky; top:0; background:var(--bg); }
+  #title { flex:1; min-width:0; overflow-wrap:anywhere; }
+  #full img { display:block; width:100%; height:auto; object-fit:contain; }
+  #full pre { white-space:pre-wrap; overflow-wrap:anywhere; font:12px ui-monospace,monospace; }
+  #details { color:var(--muted); font:11px ui-monospace,monospace; overflow-wrap:anywhere; }
+</style>
+<header><h1>MCP Assets</h1><span id="count"></span><button id="refresh" aria-label="Refresh">↻</button></header>
+<p id="status" role="status"></p><main id="grid" aria-label="MCP Assets"></main>
+<footer><button id="back" hidden></button><button id="more" hidden></button></footer>
+<dialog aria-labelledby="title"><header><strong id="title"></strong><button id="close"></button></header><div id="full"></div><p id="details"></p></dialog>
+<script>
+(() => {
+  const $ = id => document.getElementById(id), dialog = document.querySelector('dialog');
+  const translations = {
+    en:['Refresh','Older assets','Back','Close','No assets on this page.','Select a session.','Loading…','Assets unavailable. Refresh to retry.','Preview unavailable for this attachment.','Requires a CodeNomad build supporting the assets API.'],
+    fr:['Actualiser','Assets précédents','Retour','Fermer','Aucun asset sur cette page.','Sélectionnez une session.','Chargement…','Assets indisponibles. Actualisez pour réessayer.','Aperçu indisponible pour cette pièce jointe.','Nécessite une version de CodeNomad prenant en charge l’API assets.'],
+    de:['Aktualisieren','Ältere Assets','Zurück','Schließen','Keine Assets auf dieser Seite.','Sitzung auswählen.','Wird geladen…','Assets nicht verfügbar. Zum Wiederholen aktualisieren.','Für diesen Anhang ist keine Vorschau verfügbar.','Erfordert CodeNomad mit Assets-API.'],
+    es:['Actualizar','Recursos anteriores','Volver','Cerrar','No hay recursos en esta página.','Selecciona una sesión.','Cargando…','Recursos no disponibles. Actualiza para reintentar.','Vista previa no disponible para este adjunto.','Requiere CodeNomad con la API de recursos.'],
+    he:['רענון','נכסים קודמים','חזרה','סגירה','אין נכסים בעמוד זה.','בחרו שיחה.','טעינה…','הנכסים אינם זמינים. רעננו כדי לנסות שוב.','תצוגה מקדימה אינה זמינה לקובץ זה.','נדרשת גרסת CodeNomad התומכת ב-API הנכסים.'],
+    ja:['更新','以前のアセット','戻る','閉じる','このページにはアセットがありません。','セッションを選択してください。','読み込み中…','アセットを取得できません。更新して再試行してください。','この添付ファイルはプレビューできません。','アセットAPI対応のCodeNomadが必要です。'],
+    ne:['रिफ्रेस','पुराना सामग्री','पछाडि','बन्द','यस पृष्ठमा सामग्री छैन।','सत्र छान्नुहोस्।','लोड हुँदै…','सामग्री उपलब्ध छैन। फेरि प्रयास गर्न रिफ्रेस गर्नुहोस्।','यो संलग्नकको पूर्वावलोकन उपलब्ध छैन।','सामग्री API समर्थन गर्ने CodeNomad चाहिन्छ।'],
+    ru:['Обновить','Предыдущие файлы','Назад','Закрыть','На этой странице нет файлов.','Выберите сессию.','Загрузка…','Файлы недоступны. Обновите для повтора.','Предпросмотр этого вложения недоступен.','Требуется CodeNomad с поддержкой API файлов.'],
+    tr:['Yenile','Önceki varlıklar','Geri','Kapat','Bu sayfada varlık yok.','Bir oturum seçin.','Yükleniyor…','Varlıklar kullanılamıyor. Yenileyip tekrar deneyin.','Bu ek için önizleme kullanılamıyor.','Varlık API’sini destekleyen CodeNomad gerekir.'],
+    zh:['刷新','较早的资源','返回','关闭','此页中没有资源。','请选择会话。','加载中…','资源不可用，请刷新重试。','此附件无法预览。','需要支持资源 API 的 CodeNomad。']
+  };
+  let words = translations.en, context, generation = 0, currentCursor, nextCursor, history = [], loading = false, refreshPending = false;
+  let observer, visible = new Set(), queue = [], running = 0, selected = 0, previewRequest = 0, rows = [], objects = new Set();
+  const raster = mime => /^image\/(png|jpeg|gif|webp|avif)$/i.test(mime);
+  function clear() {
+    generation++; observer?.disconnect(); visible.clear(); queue=[]; rows=[];
+    for (const url of objects) URL.revokeObjectURL(url); objects.clear();
+    dialog.close(); $('full').replaceChildren(); $('grid').replaceChildren(); $('count').textContent='';
+  }
+  function object(data) {
+    const raw = atob(data.uri.slice(data.uri.indexOf(',')+1));
+    const url = URL.createObjectURL(new Blob([Uint8Array.from(raw,c=>c.charCodeAt(0))],{type:data.mime}));
+    objects.add(url); return url;
+  }
+  function release(image) {
+    if(image) {URL.revokeObjectURL(image.src);objects.delete(image.src);image.remove();}
+  }
+  async function pump() {
+    while (running < 2 && queue.length) {
+      const job = queue.shift(); if (!visible.has(job.tile)) {delete job.tile.dataset.loaded;continue;}
+      running++;
+      const epoch = generation;
+      window.codenomad.assets.read(job.asset.target, { thumbnail:true }).then(data => {
+        if (epoch!==generation || !visible.has(job.tile)) {delete job.tile.dataset.loaded;return;}
+        const image = new Image(); image.alt=job.asset.name; image.src=object(data);
+        image.onerror=()=>{release(image); if(epoch===generation) job.preview.textContent=words[8];};
+        job.preview.replaceChildren(image);
+      }).catch(()=>{if(epoch===generation) job.preview.textContent=words[8];})
+        .finally(()=>{running--; pump();});
+    }
+  }
+  function render(entries) {
+    rows=entries;
+    observer=new IntersectionObserver(changes=>{
+      for (const change of changes) {
+        const tile=change.target;
+        if(change.isIntersecting) {visible.add(tile); if(!tile.dataset.loaded) {tile.dataset.loaded='true'; queue.push(tile.job);}}
+        else {visible.delete(tile); const image=tile.querySelector('img'); if(image) {release(image);delete tile.dataset.loaded;}}
+      }
+      pump();
+    });
+    entries.forEach((asset,index)=>{
+      const tile=document.createElement('button'); tile.className='asset'; tile.type='button';
+      const preview=document.createElement('span'); preview.className='preview';
+      const file=document.createElement('span'); file.className='file'; file.textContent=asset.mime;
+      preview.append(file);
+      const caption=document.createElement('span'); caption.className='caption';
+      const name=document.createElement('span'); name.textContent=asset.name;
+      const tool=document.createElement('small'); tool.textContent=asset.tool;
+      caption.append(name,tool);tile.append(preview,caption);
+      tile.title=asset.name+'\n'+asset.tool+'\n'+asset.mime;tile.onclick=()=>open(index);
+      $('grid').append(tile);
+      if(raster(asset.mime)&&asset.available) {tile.job={tile,preview,asset};observer.observe(tile);}
+    });
+    $('count').textContent=String(entries.length);
+  }
+  async function load(cursor, reset=false) {
+    if(loading&&!reset)return;
+    clear(); const epoch=generation; loading=true;currentCursor=cursor;
+    $('refresh').disabled=true;$('status').textContent=words[6];$('more').hidden=true;$('back').hidden=true;
+    try {
+      if(!context?.sessionId) {$('status').textContent=words[5];return;}
+      if(!window.codenomad.assets) {$('status').textContent=words[9];return;}
+      let page, position=cursor;
+      // ponytail: eight empty bounded pages per gesture; Older continues sparse histories without an unbounded scan.
+      for(let n=0;n<8;n++) {page=await window.codenomad.assets.list(position);if(epoch!==generation)return;if(page.entries.length||!page.cursor)break;position=page.cursor;}
+      nextCursor=page.cursor;render(page.entries);$('status').textContent=page.entries.length?'':words[4];
+      $('more').hidden=!nextCursor;$('back').hidden=!history.length;
+    } catch {if(epoch===generation)$('status').textContent=words[7];}
+    finally {if(epoch===generation){loading=false;$('refresh').disabled=false;if(refreshPending){refreshPending=false;refresh();}}}
+  }
+  function refresh() {
+    history=[];
+    if(loading){refreshPending=true;return;}
+    load(undefined);
+  }
+  async function open(index) {
+    selected=index;const asset=rows[index], epoch=generation, request=++previewRequest;
+    release($('full').querySelector('img'));
+    $('title').textContent=asset.name;$('details').textContent=asset.tool+' · '+asset.mime;
+    $('full').textContent=words[6];if(!dialog.open)dialog.showModal();
+    try {
+      if(!asset.available)throw Error();
+      const data=await window.codenomad.assets.read(asset.target);
+      if(epoch!==generation||!dialog.open||request!==previewRequest)return;
+      if(raster(data.mime)) {const image=new Image();image.alt=asset.name;image.src=object(data);image.onerror=()=>{release(image);if(epoch===generation&&dialog.open&&request===previewRequest)$('full').textContent=words[8];};$('full').replaceChildren(image);}
+      else if(/^text\//i.test(data.mime)&&data.uri.length<100000) {const pre=document.createElement('pre');pre.textContent=new TextDecoder().decode(Uint8Array.from(atob(data.uri.split(',')[1]),c=>c.charCodeAt(0)));$('full').replaceChildren(pre);}
+      else $('full').textContent=words[8];
+    } catch {if(epoch===generation&&dialog.open&&request===previewRequest)$('full').textContent=words[8];}
+  }
+  $('close').onclick=()=>dialog.close();
+  dialog.addEventListener('close',()=>{previewRequest++;release($('full').querySelector('img'));$('full').replaceChildren();});
+  dialog.addEventListener('keydown',event=>{if(event.key==='ArrowRight'&&selected+1<rows.length){event.preventDefault();open(selected+1);}if(event.key==='ArrowLeft'&&selected>0){event.preventDefault();open(selected-1);}});
+  $('refresh').onclick=refresh;
+  $('more').onclick=()=>{history.push(currentCursor);load(nextCursor);};
+  $('back').onclick=()=>load(history.pop());
+  window.codenomad.onContext(value=>{
+    const changed=context?.sessionId!==value.sessionId;context=value;
+    words=translations[value.locale.split('-')[0]]||translations.en;
+    document.documentElement.lang=value.locale;document.documentElement.dir=value.locale.startsWith('he')?'rtl':'ltr';document.documentElement.dataset.appearance=value.appearance;
+    for(const [variable,key] of Object.entries({'--bg':'background','--tile':'surface','--ink':'text','--muted':'muted','--line':'border','--focus':'focus'})) {
+      const color=value.colors?.[key];if(color&&CSS.supports('color',color))document.documentElement.style.setProperty(variable,color);
+    }
+    $('refresh').title=words[0];$('refresh').setAttribute('aria-label',words[0]);$('more').textContent=words[1];$('back').textContent=words[2];$('close').textContent=words[3];
+    if(changed){history=[];refreshPending=false;load(undefined,true);}
+  });
+  window.codenomad.assets?.onChanged(refresh);
+})();
+</script>

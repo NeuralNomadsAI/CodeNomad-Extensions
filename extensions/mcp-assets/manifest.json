@@ -1,0 +1,10 @@
+{
+  "id": "neuralnomads.mcp-assets",
+  "name": "MCP Assets",
+  "version": "1.0.0",
+  "apiVersion": 2,
+  "author": "NeuralNomadsAI",
+  "license": "MIT",
+  "repository": "https://github.com/NeuralNomadsAI/CodeNomad-Extensions",
+  "permissions": ["session.context", "session.assets.read"]
+}

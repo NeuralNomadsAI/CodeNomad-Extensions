@@ -6,7 +6,9 @@
    build recipe. Do not depend on private CodeNomad imports or expose tokens.
 3. Declare `apiVersion` and every permission in the manifest. API majors are
    compatibility contracts, not application-version allowlists. Unsupported APIs
-   remain visible but cannot be installed. API 1 only supports `session.context`.
+   remain visible but cannot be installed. API 1 only supports `session.context`;
+   API 2 requires exactly `session.context` and `session.assets.read` for bounded
+   current-session tool-result asset metadata and embedded bytes.
 4. Publish a built ZIP with only root `manifest.json` and `panel.html`, not the
    repository source archive. Maximum ZIP/HTML size: 2 MiB; manifest: 4 KiB.
 5. Give every changed package a new semantic version and immutable GitHub Release
