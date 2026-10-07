@@ -26,6 +26,7 @@ Older/Back browse bounded pages and Refresh recovers unavailable reads. Thumbnai
 load only when visible; the gallery never mounts the transcript or changes its layout.
 
 This addon requires **extension API 2**, with explicit `session.assets.read` consent.
+Host support is tracked in [CodeNomad PR #874](https://github.com/NeuralNomadsAI/CodeNomad/pull/874).
 An older host keeps it incompatible instead of granting broader access. Embedded
 PNG/JPEG/WebP/GIF/AVIF and small text attachments have previews. Binary attachments
 and external/local references retain metadata but show preview unavailable; the

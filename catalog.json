@@ -18,6 +18,24 @@
         "tag": "session-info-v1.0.0",
         "asset": "neuralnomads.session-info-1.0.0.zip"
       }
+    },
+    {
+      "manifest": {
+        "id": "neuralnomads.mcp-assets",
+        "name": "MCP Assets",
+        "version": "1.0.0",
+        "apiVersion": 2,
+        "author": "NeuralNomadsAI",
+        "license": "MIT",
+        "repository": "https://github.com/NeuralNomadsAI/CodeNomad-Extensions",
+        "permissions": ["session.context", "session.assets.read"]
+      },
+      "description": "Browse current-session tool-result images and attachments in a thumbnail grid with image/text lightbox. Requires extension API 2 and explicit read consent; no filesystem or network access.",
+      "digest": "51c9fc2a9ac6640ae44c1ffa0795b45bf79d3cbd073febe0ad0686d5268a297e",
+      "release": {
+        "tag": "mcp-assets-v1.0.0",
+        "asset": "neuralnomads.mcp-assets-1.0.0.zip"
+      }
     }
   ]
 }
