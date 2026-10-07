@@ -8,10 +8,10 @@ The demo verifies distribution only; it is not the planned assets/image gallery.
 ## Install
 
 Use a CodeNomad build supporting the external-panel host and online catalogue
-(CodeNomad PR #862). Open **Customize right panel → Panel extensions → Available
+(CodeNomad PRs #862 and #869). Open **Customize right panel → Extensions… → Available
 online**, search/select an addon, inspect its author/version/permissions/checksum,
-and confirm installation. Packages start disabled. Enable for **All projects** or
-**This folder**; the addon appears as a new right-panel tab.
+and confirm installation. Packages start disabled. Enable the addon once for all
+projects in your CodeNomad profile; it appears as a new right-panel tab.
 
 Installation and updates are explicit. Replacement revokes all activation grants.
 If GitHub is unavailable, installed addons still work and manual ZIP installation
