@@ -1,0 +1,157 @@
+<!-- MIT License — Copyright (c) 2026 NeuralNomadsAI
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+The above copyright notice and this permission notice shall be included in
+all copies or substantial portions of the Software.
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
+THE SOFTWARE. -->
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<style>
+  :root { color-scheme: light; --bg:#f7f8fa; --tile:#edf0f4; --ink:#232a36; --muted:#626e80; --line:#cdd4df; --focus:#336cb7; font:13px system-ui,sans-serif; }
+  :root[data-appearance=dark] { color-scheme:dark; --bg:#1d2430; --tile:#252f3d; --ink:#e0e7f1; --muted:#a1aec0; --line:#3b485c; --focus:#83b6ef; }
+  * { box-sizing:border-box; border-radius:0; }
+  html, body { background:var(--bg); }
+  body { margin:0; padding:12px; color:var(--ink); }
+  header { display:flex; align-items:center; gap:8px; }
+  h1 { font-size:13px; margin:0; font-weight:600; }
+  #repository { flex:1; min-width:0; color:var(--muted); font:11px ui-monospace,monospace; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  button, input { font:inherit; color:inherit; }
+  button { border:1px solid var(--line); background:transparent; min-height:28px; padding:4px 8px; cursor:pointer; }
+  button:focus-visible, input:focus-visible { outline:2px solid var(--focus); outline-offset:2px; }
+  button:disabled { opacity:.5; cursor:default; }
+  [role=tablist] { display:flex; margin:12px 0 8px; border:1px solid var(--line); }
+  [role=tab] { flex:1; border:0; color:var(--muted); }
+  [role=tab] + [role=tab] { border-inline-start:1px solid var(--line); }
+  [role=tab][aria-selected=true] { background:var(--tile); color:var(--ink); font-weight:600; }
+  input[type=search] { width:100%; min-height:28px; padding:4px 8px; border:1px solid var(--line); background:transparent; }
+  #status { color:var(--muted); line-height:1.5; }
+  ul { list-style:none; margin:8px 0 0; padding:0; }
+  li + li { border-top:1px solid var(--line); }
+  .item { display:block; width:100%; padding:8px 4px; border:0; text-align:start; }
+  .item:hover { background:var(--tile); }
+  .title { display:block; overflow-wrap:anywhere; }
+  .number { color:var(--muted); font-variant-numeric:tabular-nums; }
+  .meta { display:block; margin-top:3px; color:var(--muted); font-size:11px; }
+  .labels { display:flex; flex-wrap:wrap; gap:4px; margin-top:4px; }
+  .label { padding:0 6px; border:1px solid var(--line); border-radius:999px; color:var(--muted); font-size:10px; line-height:16px; }
+  footer { display:flex; justify-content:space-between; gap:8px; margin-top:12px; }
+</style>
+<header><h1>Contribute</h1><span id="repository"></span><button id="refresh">↻</button></header>
+<div role="tablist"><button role="tab" id="issue" aria-selected="true"></button><button role="tab" id="pullRequest" aria-selected="false"></button></div>
+<input id="search" type="search" spellcheck="false" autocomplete="off">
+<p id="status" role="status"></p><ul id="items"></ul>
+<footer><button id="previous" hidden></button><button id="next" hidden></button></footer>
+<script>
+(() => {
+  const $ = id => document.getElementById(id);
+  // Refresh, Issues, Pull requests, Search, Loading, Nothing matches, no remote, unsupported host, sign in, rate limited,
+  // unavailable, API 3 required, Previous, Next, Open in browser, draft, closed, merged, read without sign-in
+  const translations = {
+    en:['Refresh','Issues','Pull requests','Search, or #number','Loading…','Nothing open matches.','This project has no GitHub, GitLab or Gitea remote.','This forge is not recognised. Sign in to it with gh, glab or tea.','Private or unknown repository: sign in with gh auth login, glab auth login or tea login add.','Rate limit reached. Sign in with the forge CLI or try again later.','Issues and pull requests unavailable. Refresh to retry.','Requires a CodeNomad build supporting extension API 3.','Previous','Next','Open in browser','draft','closed','merged','public read, not signed in'],
+    fr:['Actualiser','Issues','Pull requests','Rechercher, ou #numéro','Chargement…','Aucun élément ouvert ne correspond.','Ce projet n’a pas de remote GitHub, GitLab ou Gitea.','Cette forge n’est pas reconnue. Connectez-vous-y avec gh, glab ou tea.','Dépôt privé ou inconnu : connectez-vous avec gh auth login, glab auth login ou tea login add.','Limite de requêtes atteinte. Connectez la CLI de la forge ou réessayez plus tard.','Issues et pull requests indisponibles. Actualisez pour réessayer.','Nécessite une version de CodeNomad prenant en charge l’API d’extension 3.','Précédent','Suivant','Ouvrir dans le navigateur','brouillon','fermée','fusionnée','lecture publique, non connecté'],
+    de:['Aktualisieren','Issues','Pull Requests','Suchen oder #Nummer','Wird geladen…','Kein offener Eintrag passt.','Dieses Projekt hat kein GitHub-, GitLab- oder Gitea-Remote.','Diese Forge wird nicht erkannt. Melden Sie sich dort mit gh, glab oder tea an.','Privates oder unbekanntes Repository: mit gh auth login, glab auth login oder tea login add anmelden.','Ratenlimit erreicht. Mit der Forge-CLI anmelden oder später erneut versuchen.','Issues und Pull Requests nicht verfügbar. Zum Wiederholen aktualisieren.','Erfordert CodeNomad mit Erweiterungs-API 3.','Zurück','Weiter','Im Browser öffnen','Entwurf','geschlossen','zusammengeführt','öffentlich gelesen, nicht angemeldet'],
+    es:['Actualizar','Issues','Pull requests','Buscar, o #número','Cargando…','Ningún elemento abierto coincide.','Este proyecto no tiene un remoto de GitHub, GitLab o Gitea.','Esta forja no se reconoce. Inicia sesión en ella con gh, glab o tea.','Repositorio privado o desconocido: inicia sesión con gh auth login, glab auth login o tea login add.','Límite de solicitudes alcanzado. Inicia sesión con la CLI de la forja o reinténtalo más tarde.','Issues y pull requests no disponibles. Actualiza para reintentar.','Requiere CodeNomad con la API de extensiones 3.','Anterior','Siguiente','Abrir en el navegador','borrador','cerrada','fusionada','lectura pública, sin sesión'],
+    he:['רענון','Issues','Pull requests','חיפוש, או #מספר','טעינה…','אין פריט פתוח שתואם.','לפרויקט אין remote של GitHub, ‏GitLab או Gitea.','הפלטפורמה לא מזוהה. התחברו אליה עם gh, ‏glab או tea.','מאגר פרטי או לא מוכר: התחברו עם gh auth login, ‏glab auth login או tea login add.','הגעתם למגבלת הבקשות. התחברו עם ה-CLI של הפלטפורמה או נסו שוב מאוחר יותר.','ה-issues וה-pull requests אינם זמינים. רעננו כדי לנסות שוב.','נדרשת גרסת CodeNomad התומכת ב-API הרחבות 3.','הקודם','הבא','פתיחה בדפדפן','טיוטה','סגור','מוזג','קריאה ציבורית, ללא התחברות'],
+    ja:['更新','Issue','Pull request','検索、または #番号','読み込み中…','一致するオープンな項目はありません。','このプロジェクトには GitHub、GitLab、Gitea のリモートがありません。','このフォージは認識されません。gh、glab、tea でサインインしてください。','非公開または不明なリポジトリです。gh auth login、glab auth login、tea login add でサインインしてください。','レート制限に達しました。フォージの CLI でサインインするか、後で再試行してください。','Issue と pull request を取得できません。更新して再試行してください。','拡張 API 3 対応の CodeNomad が必要です。','前へ','次へ','ブラウザーで開く','下書き','クローズ済み','マージ済み','公開読み取り（未サインイン）'],
+    ne:['रिफ्रेस','Issues','Pull requests','खोज्नुहोस्, वा #नम्बर','लोड हुँदै…','मिल्ने कुनै खुला वस्तु छैन।','यस परियोजनामा GitHub, GitLab वा Gitea remote छैन।','यो forge चिनिएन। gh, glab वा tea मार्फत साइन इन गर्नुहोस्।','निजी वा अज्ञात repository: gh auth login, glab auth login वा tea login add मार्फत साइन इन गर्नुहोस्।','अनुरोध सीमा पुग्यो। forge CLI मार्फत साइन इन गर्नुहोस् वा पछि प्रयास गर्नुहोस्।','Issues र pull requests उपलब्ध छैनन्। फेरि प्रयास गर्न रिफ्रेस गर्नुहोस्।','एक्सटेन्सन API 3 समर्थन गर्ने CodeNomad चाहिन्छ।','अघिल्लो','अर्को','ब्राउजरमा खोल्नुहोस्','ड्राफ्ट','बन्द','मर्ज गरिएको','सार्वजनिक पठन, साइन इन नगरिएको'],
+    ru:['Обновить','Issues','Pull requests','Поиск или #номер','Загрузка…','Нет подходящих открытых элементов.','У проекта нет удалённого репозитория GitHub, GitLab или Gitea.','Эта платформа не распознана. Войдите в неё через gh, glab или tea.','Приватный или неизвестный репозиторий: войдите через gh auth login, glab auth login или tea login add.','Достигнут лимит запросов. Войдите через CLI платформы или повторите позже.','Issues и pull requests недоступны. Обновите для повтора.','Требуется CodeNomad с поддержкой API расширений 3.','Назад','Далее','Открыть в браузере','черновик','закрыт','слит','публичное чтение, без входа'],
+    tr:['Yenile','Issue\'lar','Pull request\'ler','Ara veya #numara','Yükleniyor…','Eşleşen açık öğe yok.','Bu projenin GitHub, GitLab veya Gitea uzak deposu yok.','Bu platform tanınmadı. gh, glab veya tea ile oturum açın.','Özel veya bilinmeyen depo: gh auth login, glab auth login veya tea login add ile oturum açın.','İstek sınırına ulaşıldı. Platform CLI\'si ile oturum açın veya daha sonra tekrar deneyin.','Issue ve pull request\'ler kullanılamıyor. Yenileyip tekrar deneyin.','Eklenti API 3\'ü destekleyen CodeNomad gerekir.','Önceki','Sonraki','Tarayıcıda aç','taslak','kapalı','birleştirildi','herkese açık okuma, oturum yok'],
+    zh:['刷新','Issue','Pull request','搜索，或 #编号','加载中…','没有匹配的未关闭条目。','此项目没有 GitHub、GitLab 或 Gitea 远程仓库。','无法识别此平台。请使用 gh、glab 或 tea 登录。','私有或未知仓库：请使用 gh auth login、glab auth login 或 tea login add 登录。','已达到请求限制。请使用平台 CLI 登录或稍后重试。','Issue 和 pull request 不可用，请刷新重试。','需要支持扩展 API 3 的 CodeNomad。','上一页','下一页','在浏览器中打开','草稿','已关闭','已合并','公开读取，未登录']
+  };
+  const reasons = { no_remote:6, unsupported_host:7, sign_in:8, rate_limited:9 };
+  let words = translations.en, context, kind = 'issue', page = 1, generation = 0, timer, totals = {}, repository;
+  const dates = () => new Intl.DateTimeFormat(context?.locale || 'en', { dateStyle:'medium' });
+  function tabs() {
+    for (const id of ['issue','pullRequest']) {
+      const tab = $(id), total = totals[id];
+      tab.setAttribute('aria-selected', String(id === kind));
+      tab.textContent = words[id === 'issue' ? 1 : 2] + (total === undefined ? '' : ` (${total})`);
+    }
+  }
+  function header() {
+    $('repository').textContent = repository ? `${repository.host}/${repository.path}` + (repository.access === 'anonymous' ? ` · ${words[18]}` : '') : '';
+    $('repository').title = repository?.webUrl ?? '';
+  }
+  function render(items) {
+    $('items').replaceChildren(...items.map(item => {
+      const row = document.createElement('li'), button = document.createElement('button');
+      button.type = 'button'; button.className = 'item'; button.title = `${words[14]} — ${item.url}`;
+      const title = document.createElement('span'), number = document.createElement('span'), meta = document.createElement('span');
+      title.className = 'title'; number.className = 'number'; meta.className = 'meta';
+      number.textContent = `${item.kind === 'issue' ? '#' : (repository?.provider === 'gitlab' ? '!' : '#')}${item.number}`;
+      title.append(number, ' ', item.title);
+      const state = item.state === 'open' ? (item.draft ? words[15] : '') : words[item.state === 'merged' ? 17 : 16];
+      meta.textContent = [item.author && '@' + item.author, dates().format(new Date(item.updatedAt)), state].filter(Boolean).join(' · ');
+      button.append(title, meta);
+      if (item.labels.length) {
+        const labels = document.createElement('span'); labels.className = 'labels';
+        for (const name of item.labels.slice(0, 8)) { const label = document.createElement('span'); label.className = 'label'; label.textContent = name; labels.append(label); }
+        button.append(labels);
+      }
+      button.onclick = () => window.codenomad.workItems.open(item.kind, item.number).catch(() => {});
+      row.append(button); return row;
+    }));
+  }
+  async function load(fresh = false) {
+    const epoch = ++generation, query = $('search').value.trim();
+    $('refresh').disabled = true; $('status').textContent = words[4]; $('items').replaceChildren(); $('previous').hidden = $('next').hidden = true;
+    try {
+      if (!window.codenomad.workItems) { $('status').textContent = words[11]; return; }
+      const result = await window.codenomad.workItems.list({ kind, query, page, fresh });
+      if (epoch !== generation) return;
+      if (result.status !== 'ok') { repository = undefined; header(); $('status').textContent = words[reasons[result.reason] ?? 10]; return; }
+      repository = result.repository; header();
+      if (!query && result.total !== undefined) { totals[kind] = result.total; tabs(); }
+      render(result.items);
+      $('status').textContent = result.items.length ? '' : words[5];
+      $('previous').hidden = page <= 1; $('next').hidden = !result.hasMore;
+    } catch { if (epoch === generation) $('status').textContent = words[10]; }
+    finally { if (epoch === generation) $('refresh').disabled = false; }
+  }
+  // The other tab's open total, so both tabs show their counts as on the forge.
+  async function count(other) {
+    if (!window.codenomad.workItems || totals[other] !== undefined) return;
+    const result = await window.codenomad.workItems.list({ kind: other, query: '', page: 1 }).catch(() => undefined);
+    if (result?.status === 'ok' && result.total !== undefined) { totals[other] = result.total; tabs(); }
+  }
+  function select(next) {
+    if (next === kind) return;
+    kind = next; page = 1; tabs(); load();
+  }
+  $('issue').onclick = () => select('issue');
+  $('pullRequest').onclick = () => select('pullRequest');
+  document.querySelector('[role=tablist]').onkeydown = event => {
+    if (event.key !== 'ArrowLeft' && event.key !== 'ArrowRight') return;
+    event.preventDefault(); select(kind === 'issue' ? 'pullRequest' : 'issue'); $(kind).focus();
+  };
+  $('search').oninput = () => { clearTimeout(timer); timer = setTimeout(() => { page = 1; load(); }, 350); };
+  $('refresh').onclick = () => { totals = {}; tabs(); load(true).then(() => count(kind === 'issue' ? 'pullRequest' : 'issue')); };
+  $('previous').onclick = () => { page--; load(); };
+  $('next').onclick = () => { page++; load(); };
+  window.codenomad.onContext(value => {
+    const first = !context; context = value;
+    words = translations[value.locale.split('-')[0]] || translations.en;
+    document.documentElement.lang = value.locale; document.documentElement.dir = value.locale.startsWith('he') ? 'rtl' : 'ltr';
+    document.documentElement.dataset.appearance = value.appearance;
+    for (const [variable, key] of Object.entries({ '--bg':'background', '--tile':'surface', '--ink':'text', '--muted':'muted', '--line':'border', '--focus':'focus' })) {
+      const color = value.colors?.[key]; if (color && CSS.supports('color', color)) document.documentElement.style.setProperty(variable, color);
+    }
+    $('refresh').title = words[0]; $('refresh').setAttribute('aria-label', words[0]);
+    $('search').placeholder = words[3]; $('search').setAttribute('aria-label', words[3]);
+    $('previous').textContent = words[12]; $('next').textContent = words[13];
+    document.querySelector('[role=tablist]').setAttribute('aria-label', 'Contribute');
+    tabs(); header();
+    // Work items belong to the project, not the session: load once per mount.
+    if (first) load().then(() => count('pullRequest'));
+  });
+})();
+</script>

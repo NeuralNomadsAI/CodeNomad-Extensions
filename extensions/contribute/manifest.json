@@ -1,0 +1,10 @@
+{
+  "id": "neuralnomads.contribute",
+  "name": "Contribute",
+  "version": "1.0.0",
+  "apiVersion": 3,
+  "author": "NeuralNomadsAI",
+  "license": "MIT",
+  "repository": "https://github.com/NeuralNomadsAI/CodeNomad-Extensions",
+  "permissions": ["session.context", "repository.workItems.read"]
+}

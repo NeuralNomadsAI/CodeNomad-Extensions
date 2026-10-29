@@ -8,7 +8,10 @@
    compatibility contracts, not application-version allowlists. Unsupported APIs
    remain visible but cannot be installed. API 1 only supports `session.context`;
    API 2 requires exactly `session.context` and `session.assets.read` for bounded
-   current-session tool-result asset metadata and embedded bytes.
+   current-session tool-result asset metadata and embedded bytes. API 3 requires
+   exactly `session.context` and `repository.workItems.read` for bounded pages of
+   the project repository's issues and pull requests, read by the host, and opening
+   one item's page on that forge.
 4. Publish a built ZIP with only root `manifest.json` and `panel.html`, not the
    repository source archive. Maximum ZIP/HTML size: 2 MiB; manifest: 4 KiB.
 5. Give every changed package a new semantic version and immutable GitHub Release
