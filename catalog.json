@@ -36,6 +36,24 @@
         "tag": "mcp-assets-v1.0.0",
         "asset": "neuralnomads.mcp-assets-1.0.0.zip"
       }
+    },
+    {
+      "manifest": {
+        "id": "neuralnomads.contribute",
+        "name": "Contribute",
+        "version": "1.0.0",
+        "apiVersion": 3,
+        "author": "NeuralNomadsAI",
+        "license": "MIT",
+        "repository": "https://github.com/NeuralNomadsAI/CodeNomad-Extensions",
+        "permissions": ["session.context", "repository.workItems.read"]
+      },
+      "description": "Browse the project repository's open issues and pull requests on GitHub, GitLab or Gitea/Forgejo with totals, search, #number lookup and labels, and open them in the browser. Requires extension API 3 and explicit read consent; reads use your signed-in gh, glab or tea, or anonymous access to public repositories; no filesystem, token or command access.",
+      "digest": "c7e3e7217ea239136f35d3ccd94a8a0ad2a49e9b0d6449856ee0e61a93cfb8f1",
+      "release": {
+        "tag": "contribute-v1.0.0",
+        "asset": "neuralnomads.contribute-1.0.0.zip"
+      }
     }
   ]
 }
