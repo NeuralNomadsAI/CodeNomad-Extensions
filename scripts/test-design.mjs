@@ -17,7 +17,8 @@ const {panelExtensionDocument}=await load('packages/ui/src/components/panel-exte
 const {composePrefill,prefillMarkers}=await load('packages/ui/src/components/panel-extensions/composer-prefill.ts');
 const {readPanelExtensionArchive}=await load('packages/server/src/panel-extensions/archive.ts');
 const root=fileURLToPath(new URL('..',import.meta.url)), source=path.join(root,'extensions/design');
-const html=await readFile(path.join(source,'panel.html'),'utf8'), manifest=JSON.parse(await readFile(path.join(source,'manifest.json'),'utf8'));
+// The packager writes LF; compare with LF whatever the checkout's line endings.
+const html=(await readFile(path.join(source,'panel.html'),'utf8')).replace(/\r\n/g,'\n'), manifest=JSON.parse(await readFile(path.join(source,'manifest.json'),'utf8'));
 
 // Package: the real host validator accepts the deterministic ZIP; notice and translations are complete.
 const LOCALES=['en','fr','de','es','he','ja','ne','ru','tr','zh'];
