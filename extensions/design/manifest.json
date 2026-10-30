@@ -1,0 +1,10 @@
+{
+  "id": "neuralnomads.design",
+  "name": "Design",
+  "version": "1.0.0",
+  "apiVersion": 4,
+  "author": "NeuralNomadsAI",
+  "license": "MIT",
+  "repository": "https://github.com/NeuralNomadsAI/CodeNomad-Extensions",
+  "permissions": ["session.context", "session.images.read", "session.images.prompts", "composer.prefill", "images.conversation", "opencode.designAgent", "panel.preferences"]
+}
