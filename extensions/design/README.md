@@ -1,7 +1,7 @@
 # Design
 
 A light table for the images the Design agent creates in a project's **Images
-conversation**. Install the published addon ZIP through **Customize right panel 
+conversation**. Install the published addon ZIP through **Customize right panel
 Extensions**, review its permissions, then activate its checkbox. Requires a
 CodeNomad host supporting extension API 4.
 
