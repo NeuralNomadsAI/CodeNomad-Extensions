@@ -51,13 +51,16 @@ const proven=(label,series,generationKey,parentKeys=[],extra={})=>image(label,se
 const generation=(series,tool,outcome,extra={})=>({kind:'generation',target:{messageID:`msg_${series}`,part:++n,digest:hex(n)},series:key(series),time:T0+n*60000,key:key('g'+n),tool,outcome,...extra});
 const K={a:key('KA'),a2:key('KA2'),b:key('KB'),old:key('KOLD'),n:key('KN')}, MODEL='fixture/image-1';
 const askShow=generation('S2','completed','completed',{key:K.n,prompt:'Banner, bold',model:MODEL});
+// Two failures in two replies: one with its prompt, one known only by its time.
+const failed={};
 const pages={
   ses_images:[{entries:[
     generation('S2','completed','completed',{key:K.a2,prompt:'Refine icon-a, flatter background',model:MODEL}),
     proven('icon-a2','S2',K.a2,[K.a],{otherRefs:1,prompt:'Refine icon-a, flatter background',model:MODEL}), image('icon-x','S2'), image(null,'S2'),
-    generation('S2','running','none'), generation('S2','streaming','none'), generation('S2','error','none'), generation('S2','completed','unknown'), askShow,
-    generation('S2','completed','cancelled'), generation('S2','unknown','none'), generation('S2','completed','error'),
+    generation('S2','running','none'), generation('S2','streaming','none'), failed.s2=generation('S2','error','none',{prompt:'Logo, bold {{1}} `monogram`',model:MODEL}),
+    generation('S2','completed','unknown'), askShow, generation('S2','completed','cancelled'), generation('S2','unknown','none'),
     proven('icon-a','S1',K.a,[],{prompt:'App icon, minimal direction',model:MODEL}), proven('icon-b','S1',K.b,[K.old],{prompt:'App icon, bold',model:MODEL}),
+    failed.s1=generation('S1','completed','error'),
     generation('S1','completed','completed',{key:K.a,prompt:'App icon, minimal direction',model:MODEL}), generation('S1','completed','completed',{key:K.b,prompt:'App icon, bold',model:MODEL}),
   ],cursor:'1'},{entries:[proven('icon-old','S0',K.old,[],{prompt:'App icon, first pass',model:MODEL}), generation('S0','completed','completed',{key:K.old})],cursor:null}],
   ses_work:[{entries:[image('work-shot','W')],cursor:null}],
@@ -84,7 +87,7 @@ const hostScript=`
 const doc=await (await fetch('/doc')).text(), fixture=await (await fetch('/fixture')).json();
 const H=window.H={context:{apiVersion:4,sessionId:'ses_images',locale:'en',appearance:'dark',colors:{background:'#343a43',surface:'#252a31',text:'#e8ecf1',muted:'#a9b2bf',border:'#4a5361',focus:'#7fb2f0'}},
   status:{generation:'available',imageModels:true,designAgent:'present',contentVersion:1,chatModelSeesImages:true},lookup:'absent',gitExclusion:'excluded',
-  store:{},storeMode:'ok',draft:'',lastPrefill:-Infinity,refused:[],calls:[],unknown:0,topMessages:0,maxInFlight:0,conflictOnce:false,delay:15,mounts:0,after:null};
+  store:{},storeMode:'ok',draft:'',lastPrefill:-Infinity,refused:[],calls:[],unknown:0,topMessages:0,maxInFlight:0,conflictOnce:false,delay:15,delays:{},answered:[],mounts:0,after:null};
 let port, frame;
 window.addEventListener('message',event=>{ if(frame&&event.source===frame.contentWindow) H.topMessages++; });
 H.mount=()=>{
@@ -103,8 +106,8 @@ function handle(own,data){
   if(data?.type!=='api4:request') return;
   const {id,capability,method,input}=data, name=capability+'.'+method;
   H.calls.push({name,input:JSON.parse(JSON.stringify(input??null))}); own.inFlight++; H.maxInFlight=Math.max(H.maxInFlight,own.inFlight);
-  const answer=message=>setTimeout(()=>{ own.inFlight--; own.postMessage({type:'api4:result',id,...message});
-    if(H.after){ const after=H.after; H.after=null; setTimeout(after,0); } },H.delay);
+  const answer=message=>setTimeout(()=>{ own.inFlight--; own.postMessage({type:'api4:result',id,...message}); H.answered.push(name);
+    if(H.after){ const after=H.after; H.after=null; setTimeout(after,0); } },H.delays[name]??H.delay);
   Promise.resolve().then(()=>run(name,input??{})).then(result=>answer({result}),()=>answer({error:true}));
 }
 function run(name,input){
@@ -182,6 +185,8 @@ const fingerprint=frame=>frame.locator('body').evaluate(async()=>({series:[...do
     const canvas=document.createElement('canvas');canvas.width=image.naturalWidth;canvas.height=image.naturalHeight;const g=canvas.getContext('2d');g.drawImage(image,0,0);
     let hash=0;for(const value of g.getImageData(0,0,canvas.width,canvas.height).data)hash=(hash*31+value)>>>0;return `${tile.textContent}#${hash}`;}))}));
 const tick=view=>view.waitForTimeout(1050);
+// Columns of the newest series' grid, read once the gallery settled.
+const columns=frame=>frame.locator('#series .grid').first().evaluate(node=>getComputedStyle(node).gridTemplateColumns.split(' ').length);
 const capture=async(view,name)=>{if(!process.env.CODENOMAD_PANEL_CAPTURE_DIR)return;await mkdir(process.env.CODENOMAD_PANEL_CAPTURE_DIR,{recursive:true});
   await view.screenshot({path:path.join(process.env.CODENOMAD_PANEL_CAPTURE_DIR,`design-${name}.png`)});};
 const notice=frame=>frame.locator('#notice').textContent();
@@ -204,6 +209,9 @@ try {
   assert.equal(await frame.locator('#card').getAttribute('data-state'),'images');
   assert.equal(await frame.locator('#recipes button').count(),6);
   assert.equal(await frame.locator('#turns').inputValue(),'3');
+  assert.equal(await columns(frame),2,'two columns at 420 px');
+  await view.setViewportSize({width:600,height:2600}); await until(async()=>await columns(frame)===3,'three columns when wide',2000);
+  await view.setViewportSize({width:420,height:2600}); await until(async()=>await columns(frame)===2,'two columns again',2000);
   assert.deepEqual(await frame.locator('body').evaluate(()=>Object.keys(window.codenomad).sort()),['apiVersion','composer','conversation','getContext','images','onContext','preferences']);
   console.log('PASS: series, labels, origin badges, generation states, colours and declared bridge objects');
 
@@ -274,7 +282,12 @@ try {
   await press(detail.getByRole('button',{name:'Save to project…'}),added);
   await press(frame.getByRole('button',{name:'App icon'}),added);
   await press(frame.locator('.gen[data-state=no-read]').getByRole('button',{name:'Ask the agent to show it'}),added);
-  await press(frame.locator('.gen[data-state=failed]').first().getByRole('button',{name:'Retry'}),added);
+  // Each Retry names its own generation: time and prompt (braces and backticks removed), else time alone.
+  const shown=time=>frame.locator('body').evaluate((_,time)=>new Intl.DateTimeFormat('en',{dateStyle:'short',timeStyle:'short'}).format(time),time);
+  const [failedAt2,failedAt1]=[await shown(failed.s2.time),await shown(failed.s1.time)];
+  assert.notEqual(failedAt2,failedAt1);
+  await press(frame.locator('.gen[data-state=failed]').nth(0).getByRole('button',{name:'Retry'}),added);
+  await press(frame.locator('.gen[data-state=failed]').nth(1).getByRole('button',{name:'Retry'}),added);
   assert.equal(await host(()=>H.draft),[
     `Refine image icon-a2 (${path2}) keeping its direction. 3 image(s): `,
     `Make variants of image icon-a2 (${path2}) keeping its composition. 3 image(s): `,
@@ -282,7 +295,8 @@ try {
     `Copy ${path2} into the project, to: `,
     'New design: App icon (recipe `app-icon`). 3 image(s). Brief: ',
     'Read the generated image `.codenomad/design/banner/banner-bold-a.png` and show it here with your critique.',
-    'Retry the image generation that failed in your last reply. 3 image(s): '].join('\n\n'));
+    `Retry the failed image generation from ${failedAt2} (prompt: “Logo, bold 1 monogram”). 3 image(s): `,
+    `Retry the failed image generation from ${failedAt1}. 3 image(s): `].join('\n\n'));
   await host(digest=>H.refused.push(digest),byLabel('icon-a2').target.digest);
   await press(detail.getByRole('button',{name:'Refine',exact:true}),'The message box refused this request: its draft is a command or ends with a mention, or the image can no longer be referenced.');
   await host(()=>{H.refused=[];});
@@ -293,7 +307,7 @@ try {
   const calls=await host(()=>({names:[...new Set(H.calls.map(call=>call.name))],unknown:H.unknown,top:H.topMessages,refs:H.calls.filter(call=>call.name==='composer.prefill').map(call=>call.input.refs?.length??0)}));
   assert(calls.names.every(name=>ALLOWED.includes(name)),calls.names.join());
   assert.deepEqual([calls.unknown,calls.top],[0,0]);
-  assert.deepEqual(calls.refs,[1,1,1,1,1,0,1,0,1,1],'retry and recipes carry no reference');
+  assert.deepEqual(calls.refs,[1,1,1,1,1,0,1,0,0,1,1],'retry and recipes carry no reference');
   console.log('PASS: refine, variants, direction, save, recipe, ask-to-show and retry only prefill; busy, refused references and images per turn');
 
   // AC-37: the setting survives remounts; invalid or unavailable preferences give 3.
@@ -303,8 +317,17 @@ try {
     await host(([store,mode])=>{H.store=store;H.storeMode=mode;H.mount();},[store,mode]); await ready(frame,5);
     assert.equal(await frame.locator('#turns').inputValue(),'3',JSON.stringify(store)+mode);
   }
-  await host(()=>{H.store={};H.storeMode='ok';});
-  console.log('PASS: images per turn kept across remounts, invalid and unavailable preferences fall back to 3');
+  // A late stored value never overrides the user's choice.
+  await host(()=>{H.store={};H.storeMode='ok';H.delays={'preferences.get':1500};H.answered=[];H.mount();});
+  await until(()=>frame.locator('#turnsBox').isVisible(),'selector shown before preferences answer',3000);
+  assert.equal(await host(()=>H.answered.includes('preferences.get')),false,'preferences still pending');
+  await frame.getByRole('combobox',{name:'Images per turn'}).selectOption('2');
+  await until(()=>host(()=>H.store.imagesPerTurn===2),'choice saved');
+  await until(()=>host(()=>H.answered.includes('preferences.get')),'late preferences answer');
+  await frame.locator('body').evaluate(()=>new Promise(resolve=>requestAnimationFrame(resolve)));
+  assert.equal(await frame.locator('#turns').inputValue(),'2','late answer ignored');
+  await host(()=>{H.delays={};H.store={};});
+  console.log('PASS: images per turn kept across remounts, invalid, unavailable and late preferences');
 
   // AC-34: identical reconstruction, pixels included, after a conversation and a tab round trip.
   await host(()=>H.mount()); await ready(frame,5); await loaded(frame);
@@ -387,7 +410,7 @@ try {
   await until(async()=>(await frame.locator('#status').textContent())==='No conversation displayed.','no conversation');
   assert.equal(await frame.locator('#where').textContent(),'No conversation');
   const prefillsBefore=await count('composer.prefill');
-  assert.equal(await count('conversation.startNew'),1); assert.equal(prefillsBefore,10);
+  assert.equal(await count('conversation.startNew'),1); assert.equal(prefillsBefore,11);
   console.log('PASS: S13, S1 with readiness, S1u retry, found card, opening, New Images conversation emphasis and empty states');
 
   // Object URLs are released with the conversation.
@@ -436,6 +459,7 @@ try {
   assert.equal(await narrowDetail.getByRole('button',{name:'Variants'}).isVisible(),true);
   await narrow.frame.getByRole('button',{name:'Compare'}).click(); await tile(narrow.frame,{name:/^icon-a$/}).click();
   assert.equal(await narrowDetail.locator('.pair').evaluate(node=>getComputedStyle(node).gridTemplateColumns.split(' ').length),1);
+  assert.equal(await columns(narrow.frame),1,'one gallery column in a narrow panel');
   assert.equal(await narrowDetail.getByText('Widen the panel to compare side by side.').isVisible(),true);
   await capture(narrow.view,'narrow');
   await narrow.view.close();
@@ -444,7 +468,7 @@ try {
   // S12: phone width, two-column gallery, side-by-side comparison and a full-screen viewer.
   const phone=await open(390,844);
   await ready(phone.frame,5);
-  await until(async()=>(await phone.frame.locator('.grid').first().evaluate(node=>getComputedStyle(node).gridTemplateColumns.split(' ').length))>=2,'phone gallery columns');
+  assert.equal(await columns(phone.frame),2,'two columns at phone width');
   await tile(phone.frame,{name:/^icon-a2/}).click();
   await phone.frame.locator('#selection').getByRole('button',{name:'View full size'}).click();
   assert.equal(Math.round((await phone.frame.locator('dialog[open]').boundingBox()).width),390);
