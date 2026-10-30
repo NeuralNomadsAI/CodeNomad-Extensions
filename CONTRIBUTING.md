@@ -11,7 +11,17 @@
    current-session tool-result asset metadata and embedded bytes. API 3 requires
    exactly `session.context` and `repository.workItems.read` for bounded pages of
    the project repository's issues and pull requests, read by the host, and opening
-   one item's page on that forge.
+   one item's page on that forge. API 4 requires `session.context` plus a
+   non-empty subset of `session.images.read` (read-back images of the displayed
+   conversation), `session.images.prompts` (their prompts and models, only with
+   `session.images.read`), `composer.prefill` (text added to the displayed
+   conversation's message box, never sent), `images.conversation` (open or start
+   the project's Images conversation), `opencode.designAgent` (CodeNomad provides
+   its Design agent to OpenCode while the addon is enabled) and
+   `panel.preferences` (one small JSON object per installed addon), each at most
+   once, in any order. Declare only the capabilities the panel uses; each one has
+   its own install sentence. API 4 addons install only on a CodeNomad host
+   supporting extension API 4; other hosts list them as incompatible.
 4. Publish a built ZIP with only root `manifest.json` and `panel.html`, not the
    repository source archive. Maximum ZIP/HTML size: 2 MiB; manifest: 4 KiB.
 5. Give every changed package a new semantic version and immutable GitHub Release
@@ -26,6 +36,14 @@
 8. Submit a PR to update `catalog.json`. Maintainers verify ID/author identity,
    source changes, license notices, build recipe, manifest/permissions, digest,
    installability, accessibility, translations, lifecycle and frame restrictions.
+   An addon using API 2 or later ships a browser check run against a CodeNomad
+   checkout supporting its API, like `scripts/test-design.mjs` for API 4: it
+   validates the ZIP with the checkout's archive validator, renders the panel in
+   the checkout's frame document and answers every API 4 method the panel calls
+   through a simulated host channel, with the checkout's prefill composition.
+   CodeNomad's own tests cover the real channel, routes and consent checks
+   (`dev-docs/PANEL_EXTENSIONS.md`, Checks). Texts naming CodeNomad's UI use that
+   locale's CodeNomad labels.
 9. Honour disposable panel lifecycle: hiding, changing project/session,
    disconnecting, disabling, replacing or removing may destroy the panel. Do not
    weaken CSP/sandbox, auto-run commands, request credentials or upload user data.

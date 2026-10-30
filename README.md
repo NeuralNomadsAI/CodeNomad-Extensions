@@ -74,12 +74,13 @@ message box of the displayed conversation; the panel never sends a message,
 generates an image or writes a file. It adapts the MCP Assets code (MIT notice kept
 in `panel.html`); MCP Assets is unchanged.
 
-This addon requires **extension API 4** (CodeNomad PR #1205), with its
-`session.images.read`, `session.images.prompts`, `composer.prefill`,
-`images.conversation`, `opencode.designAgent` and `panel.preferences`
-permissions. While it is enabled, CodeNomad provides the Design agent and its image
-skills to OpenCode. Prompts reach the panel only through the separate prompts
-permission; the addon has no filesystem, network or command access.
+This addon requires a CodeNomad host supporting **extension API 4** (CodeNomad
+PR #1205), with its `session.images.read`, `session.images.prompts`,
+`composer.prefill`, `images.conversation`, `opencode.designAgent` and
+`panel.preferences` permissions; other hosts list it as incompatible. While it is
+enabled, CodeNomad provides the Design agent and its image skills to OpenCode.
+Prompts reach the panel only through the separate prompts permission; the addon
+has no filesystem, network or command access.
 
 ```sh
 python scripts/package.py extensions/design dist
@@ -87,7 +88,8 @@ node scripts/test-design.mjs /absolute/path/to/CodeNomad
 ```
 
 The test loads the checkout's frame document, prefill composition and archive
-validator, and simulates the API 4 host channel in Chromium.
+validator, and simulates the API 4 host channel in Chromium. Run it against a
+CodeNomad checkout supporting extension API 4.
 
 ## Publish an addon
 
@@ -99,7 +101,13 @@ API 1 permits only `session.context`: session ID, locale and appearance. API 2
 requires both `session.context` and `session.assets.read` for bounded, current-session
 tool-result assets. API 3 requires both `session.context` and `repository.workItems.read`
 for bounded pages of the project repository's issues and pull requests, read by the
-host. No API permits local file access, network access or native commands.
+host. API 4 requires `session.context` plus any non-empty subset of
+`session.images.read`, `session.images.prompts` (only with `session.images.read`),
+`composer.prefill`, `images.conversation`, `opencode.designAgent` and
+`panel.preferences`, and installs only on a CodeNomad host supporting extension
+API 4. No API permits local file access, network access or native commands.
+[CONTRIBUTING.md](CONTRIBUTING.md) describes each permission and how API 4 addons
+are tested.
 
 Authors may publish in separate GitHub repositories. Submit a PR adding the
 release's manifest, description, SHA-256 and exact release tag/ZIP asset to

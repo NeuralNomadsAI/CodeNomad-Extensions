@@ -54,6 +54,24 @@
         "tag": "contribute-v1.0.0",
         "asset": "neuralnomads.contribute-1.0.0.zip"
       }
+    },
+    {
+      "manifest": {
+        "id": "neuralnomads.design",
+        "name": "Design",
+        "version": "1.0.0",
+        "apiVersion": 4,
+        "author": "NeuralNomadsAI",
+        "license": "MIT",
+        "repository": "https://github.com/NeuralNomadsAI/CodeNomad-Extensions",
+        "permissions": ["session.context", "session.images.read", "session.images.prompts", "composer.prefill", "images.conversation", "opencode.designAgent", "panel.preferences"]
+      },
+      "description": "Light table for the images CodeNomad's Design agent creates in a project's Images conversation: read-back images grouped by reply, generation states, origin, small-size and side-by-side comparison, and requests added to the message box for you to send. Requires extension API 4; while enabled, CodeNomad provides its Design agent and image skills to OpenCode. The panel never sends a message, generates an image or writes a file; prompts are read only with their separate permission; no filesystem, network or command access.",
+      "digest": "9c946a5839015b97cefc6593745279dd9e036990e43aa908a9aa60bfcd25f653",
+      "release": {
+        "tag": "design-v1.0.0",
+        "asset": "neuralnomads.design-1.0.0.zip"
+      }
     }
   ]
 }
