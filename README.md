@@ -4,7 +4,8 @@ Official online catalogue of optional CodeNomad right-panel UI addons. Extension
 are distributed independently of CodeNomad releases. This repository contains the
 curated `catalog.json`, contribution rules, the **MCP Assets** gallery requested in
 CodeNomad #801, the **Contribute** issue and pull request view following
-CodeNomad #500 and a minimal **Session info** distribution demo.
+CodeNomad #500, the **Design** light table for the Design image companion and a
+minimal **Session info** distribution demo.
 
 ## Install
 
@@ -62,6 +63,31 @@ access and changes nothing on the forge.
 python scripts/package.py extensions/contribute dist
 node scripts/test-contribute.mjs /absolute/path/to/CodeNomad
 ```
+
+## Design
+
+`extensions/design/` is the light table of a project's Images conversation, where
+CodeNomad's Design agent creates images: the images the agent read back, grouped by
+reply, with generation states, lineage, comparison at 16, 32 and 64 px and a
+full-size viewer. Its buttons open the Images conversation or add a request to the
+message box of the displayed conversation; the panel never sends a message,
+generates an image or writes a file. It adapts the MCP Assets code (MIT notice kept
+in `panel.html`); MCP Assets is unchanged.
+
+This addon requires **extension API 4** (CodeNomad PR #1205), with its
+`session.images.read`, `session.images.prompts`, `composer.prefill`,
+`images.conversation`, `opencode.designAgent` and `panel.preferences`
+permissions. While it is enabled, CodeNomad provides the Design agent and its image
+skills to OpenCode. Prompts reach the panel only through the separate prompts
+permission; the addon has no filesystem, network or command access.
+
+```sh
+python scripts/package.py extensions/design dist
+node scripts/test-design.mjs /absolute/path/to/CodeNomad
+```
+
+The test loads the checkout's frame document, prefill composition and archive
+validator, and simulates the API 4 host channel in Chromium.
 
 ## Publish an addon
 
