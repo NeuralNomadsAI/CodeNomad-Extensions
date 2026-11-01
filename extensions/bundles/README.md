@@ -1,0 +1,78 @@
+# Intégrations — development draft
+
+`neuralnomads.bundles` is a self-contained API 4 panel for the reviewed OpenCode
+integrations catalogue. This code-only development slice is unpublished. Its
+manifest requests `session.context`, `bundles.read` and `bundles.manage`.
+
+## Supported contract
+
+The panel targets CodeNomad commit
+`61382f7ec7ddcf68e190e8023644362457c227ea`: its bundles projection schemas,
+fixed public bridge, archive validator and sandbox frame. A host implementing
+that contract is required. The panel uses HTML, CSS and JavaScript directly,
+with ten locale dictionaries, Hebrew RTL and the host's six colour roles.
+
+Each catalogue integration has an accessible disclosure, description,
+non-affiliation notice, plugin version/configuration/activation, scoped actions
+and connection state. Native integrations have Global-only management,
+application component status, available offers and the current conversation's
+attachment. Installation offers a scope selector defaulting to Global.
+Activation uses native three-state checkboxes: mixed means Default, whose
+effective activation remains unconfirmed. The summary counts confirmed enabled
+states only. Missing package version, unavailable state and unknown attachment
+retain their distinct meanings.
+
+Install, update and remove call `bundles.request`; activation calls `setActive`;
+application installation calls `installHost`; attaching calls `attach`.
+CodeNomad supplies confirmations, including the removal interruption warning
+and exact declaration/scope checks. An acknowledgement or `confirmed` outcome
+means a request was admitted/submitted. Effective results come from state reads.
+Lost/uncertain results invite explicit refresh; mutations are never replayed.
+Events invalidate display snapshots; idle panels perform no polling.
+
+No package specs, native paths, RPC selectors, foreign sessions, binding
+authorities, credentials or executable URLs are accepted from panel controls.
+Documentation addresses remain selectable plain text inside the sandbox.
+
+## Build and check
+
+From this repository:
+
+```sh
+python scripts/package.py extensions/bundles dist
+node scripts/test-bundles.mjs <pinned-CodeNomad-checkout>
+python scripts/test_package.py
+```
+
+The ZIP contains root `manifest.json` and `panel.html` only; the adjacent
+`.sha256` identifies its exact deterministic bytes. No release, catalogue entry
+or publishing workflow is part of this draft.
+
+The browser check reads **the HTML returned from the packaged ZIP** through the
+real pinned validator and frame generator. Its host is simulated over a real
+MessagePort. It checks schemas, three families, errors/unknown/stale states,
+keyboard/ARIA, scope selection, action admission without early success or replay,
+exact surviving iframe-trigger focus, fallback focus, context fences, lifecycle,
+all locales and narrow light/dark layouts. See
+[`scripts/fixtures/bundles/README.md`](../../scripts/fixtures/bundles/README.md)
+for optional fixture screenshots and integrity-pinned test-only axe 4.11.0 setup.
+Test tools stay outside the product archive.
+
+## Acceptance coverage and remaining gates
+
+| Criterion | Development slice | Full E1 gate |
+|---|---|---|
+| AC-E1, sections and states | Actual packaged panel, schema-validated fixtures and real-iframe axe audit when configured | The bridge needs authoritative `pending` and installation-unconfirmed fields; the panel derives neither from timers nor missing versions. |
+| AC-E2, managed actions | Fixed public calls, admitted/submitted outcomes and state reconciliation checked with a simulated host | Run the actual archive through ExtensionPanel, trusted confirmations and native backend. Author `detach` is refused at the pinned trust boundary; a trusted D24 control/API placement requires review. |
+| AC-E3, accessibility | Keyboard, named regions, polite grouped updates, stable disclosures, exact surviving-trigger/fallback focus and both-palette axe checks | Manual screen-reader review; real host confirmation/iframe-unmount focus checks. Axe incomplete checks require explicit review. |
+| AC-E4, catalogue publication | Code-only draft PR | Explicit publication authorization, release and catalogue entry. |
+| §5.1, documentation | Safe non-navigating text | Fixed reviewed host documentation opener. |
+
+The D24 placement remains an open host decision. This panel supplies no detach
+button, synthetic click proof, author confirmation or destructive direct message.
+D25 removal belongs to the trusted host; the panel performs no session census,
+attachment cleanup or compensating detach/reinstall. A retained valid stale
+catalogue remains usable; an unavailable catalogue disables management.
+
+The repository MIT license applies. Integrations are independent of their
+application vendors; catalogue descriptions supply application requirements.

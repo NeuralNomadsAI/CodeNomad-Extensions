@@ -1,0 +1,420 @@
+<!-- MIT License — Copyright (c) 2026 NeuralNomadsAI
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+The above copyright notice and this permission notice shall be included in
+all copies or substantial portions of the Software.
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
+THE SOFTWARE. -->
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title></title>
+<style>
+  :root { color-scheme:light; --bg:#f7f8fa; --surface:#edf0f4; --ink:#232a36; --muted:#526074; --line:#a9b3c2; --focus:#265b9f; --chip-radius:3px; font:13px system-ui,sans-serif; }
+  :root[data-appearance=dark] { color-scheme:dark; --bg:#1d2430; --surface:#252f3d; --ink:#e0e7f1; --muted:#b2bed0; --line:#67768b; --focus:#83b6ef; }
+  * { box-sizing:border-box; border-radius:0; }
+  html,body { background:var(--bg); color:var(--ink); }
+  body { margin:0; padding:12px; overflow-wrap:anywhere; }
+  [hidden] { display:none !important; }
+  header,.row,.scopes { display:flex; align-items:center; flex-wrap:wrap; gap:8px; }
+  header { margin-bottom:8px; }
+  header>div { flex-basis:100%; }
+  h1,h2,h3,p { margin:0; }
+  h1,h2 { font-size:13px; font-weight:600; }
+  h3 { font-size:12px; }
+  header h1 { flex:1; }
+  button,select { min-height:30px; padding:5px 8px; border:1px solid var(--line); background:var(--surface); color:inherit; font:inherit; cursor:pointer; }
+  button:focus-visible,select:focus-visible,input:focus-visible { outline:2px solid var(--focus); outline-offset:2px; }
+  button:disabled,button[aria-disabled=true] { opacity:.6; cursor:default; }
+  .muted,dt { color:var(--muted); }
+  p { line-height:1.5; }
+  #catalog,#notice,#preview { margin-bottom:10px; }
+  #notice:empty { display:none; }
+  #notice { padding:8px; border:1px solid var(--line); }
+  .integration { border:1px solid var(--line); margin-bottom:10px; }
+  .disclosure { display:flex; gap:8px; flex-wrap:wrap; align-items:center; text-align:start; border:0; width:100%; padding:10px; background:var(--bg); }
+  .disclosure::before { content:'▸'; }
+  .disclosure[aria-expanded=true]::before { content:'▾'; }
+  .name { flex:1; min-width:120px; }
+  .badge-shape { border:1px solid var(--line); border-radius:var(--chip-radius); padding:1px 5px; font-size:11px; font-weight:400; }
+  .body { border-top:1px solid var(--line); padding:10px; display:grid; gap:14px; }
+  .group { display:grid; gap:8px; }
+  dl { display:grid; grid-template-columns:minmax(80px,auto) minmax(0,1fr); gap:4px 10px; margin:0; }
+  dd { margin:0; }
+  .scope { display:flex; flex-wrap:wrap; gap:8px; align-items:center; padding:8px; background:var(--surface); }
+  .scope label { flex:1; display:flex; align-items:center; gap:6px; min-width:140px; }
+  input { accent-color:var(--focus); }
+  .offers { display:grid; gap:8px; }
+  .offer { display:grid; gap:6px; border-inline-start:2px solid var(--line); padding-inline-start:8px; }
+  .offer button { justify-self:start; }
+  @media(max-width:359px) { body { padding:8px; } dl { grid-template-columns:1fr; } dd { margin-bottom:4px; } .scope { align-items:stretch; } }
+</style>
+<header><h1 id="heading"></h1><button id="refresh" type="button">↻</button>
+<div>
+<p id="summary" class="muted"></p>
+<p id="catalog" class="muted"></p>
+<p id="preview" class="muted"></p>
+</div></header>
+<p id="notice" role="status" aria-live="polite" aria-atomic="true"></p>
+<main id="integrations" aria-labelledby="heading"></main>
+<script type="application/json" id="i18n">
+{
+"en":{"heading":"Integrations","refresh":"Refresh","preview":"Development preview · not published","summary":"{count} integrations · {active} confirmed active","fresh":"Catalogue up to date","stale":"Catalogue unavailable · last valid catalogue: {date}","unavailable":"Catalogue unavailable","unknownDate":"date unknown","loading":"Reading integration state…","noApi":"This preview requires CodeNomad with the bundles API 4 bridge.","noSession":"No conversation displayed.","readFailed":"State unavailable. Refresh to retry; no action was repeated.","empty":"No integrations in the available catalogue.","updated":"Integration states refreshed.","native":"In the application","vendor-mcp":"Vendor MCP","api":"API","plugin":"Plugin","description":"Description","version":"Installed version","versionUnknown":"Version unknown","notInstalled":"Not installed","configured":"Configured","notConfigured":"Not configured","scope":"Scope","global":"Global","project":"Project","globalOnly":"Native integrations use Global only.","enabled":"Enabled","disabled":"Disabled","default":"Default · activation unconfirmed","effective":"Effective activation","install":"Install","update":"Update","remove":"Remove","activate":"Activation {scope}","updateAvailable":"Plugin update available","application":"Application","host":"Application component","partVersion":"Installed component version","expected":"Expected component version","appVersion":"Application version","installHost":"Install in application","updateHost":"Update application component","machine":"On the machine running OpenCode.","openApp":"Open {app} and enable its OpenCode offer to check the application component.","connection":"Connection","attachment":"This conversation","attached":"Attached","none":"Not attached","unknown":"Unknown","available":"Application available","absent":"Not installed","inactive":"Inactive","failed":"Failed · see Plugins in CodeNomad","unsupported":"Unsupported","non-conforming":"Non-conforming","ok":"Ready","outdated":"Application component update available","incompatible":"Incompatible","connected":"Connected","signed_out":"Signed out","error":"Connection error","attach":"Attach to this conversation","noOffers":"No available application offers. Open {app} and enable its OpenCode offer.","offersUnknown":"Available applications could not be checked. Refresh to retry.","detachGap":"Detaching needs a trusted CodeNomad control; this preview cannot request it.","docs":"Documentation","docsGap":"Documentation is presented as text; the fixed native opener is pending.","nonAffiliation":"Independent integration; not affiliated with the application vendor.","legacy":"Legacy installation · consult the integration’s migration documentation.","confirming":"Review the confirmation in CodeNomad.","confirmed":"Action submitted. Its effective result follows the integration state.","cancelled":"Action cancelled.","expired":"Confirmation expired. No action was repeated.","requestFailed":"The request failed or its result is uncertain. Refresh to check; no action was repeated.","busy":"Another request is pending or the host is busy. Try again explicitly.","invalid":"The host could not admit this request. Refresh to check its state.","protocol":"Compatibility","appRequirement":"Application requirement","catalogStatus":"Catalogue status","stable":"Stable","deprecated":"Deprecated","catalogPreview":"Preview","notAvailable":"Unavailable"}
+,
+"fr":{
+"heading":"Intégrations","refresh":"Actualiser","preview":"Aperçu de développement · non publié","summary":"{count} intégrations · activation confirmée pour {active}",
+"fresh":"Catalogue à jour","stale":"Catalogue indisponible · dernier catalogue valide : {date}","unavailable":"Catalogue indisponible","unknownDate":"date inconnue","loading":"Lecture de l’état des intégrations…",
+"noApi":"Cet aperçu nécessite CodeNomad avec le pont bundles de l’API 4.","noSession":"Aucune conversation affichée.","readFailed":"État indisponible. Actualisez pour réessayer ; aucune action n’a été répétée.","empty":"Aucune intégration dans le catalogue disponible.","updated":"États des intégrations actualisés.",
+"native":"Dans l’application","vendor-mcp":"MCP du fournisseur","api":"API","plugin":"Plugin","description":"Description","version":"Version installée","versionUnknown":"Version inconnue","notInstalled":"Non installé","configured":"Configuré","notConfigured":"Non configuré",
+"scope":"Portée","global":"Global","project":"Projet","globalOnly":"Les intégrations natives utilisent uniquement la portée « Global ».","enabled":"Activé","disabled":"Désactivé","default":"Par défaut · activation non confirmée","effective":"Activation effective",
+"install":"Installer","update":"Mettre à jour","remove":"Supprimer","activate":"Activation · {scope}","updateAvailable":"Mise à jour du plugin disponible",
+"application":"Application","host":"Composant de l’application","partVersion":"Version du composant installé","expected":"Version attendue du composant","appVersion":"Version de l’application","installHost":"Installer dans l’application","updateHost":"Mettre à jour le composant de l’application",
+"machine":"Sur la machine exécutant OpenCode.","openApp":"Ouvrez {app} et activez son offre OpenCode pour vérifier le composant de l’application.",
+"connection":"Connexion","attachment":"Cette conversation","attached":"Rattachée","none":"Non rattachée","unknown":"Inconnu","available":"Application disponible","absent":"Non installé","inactive":"Inactif","failed":"En échec · voir Plugins dans CodeNomad","unsupported":"Non pris en charge","non-conforming":"Non conforme","ok":"Prêt","outdated":"Mise à jour du composant de l’application disponible","incompatible":"Incompatible","connected":"Connecté","signed_out":"Déconnecté du compte","error":"Erreur de connexion",
+"attach":"Rattacher à cette conversation","noOffers":"Aucune offre d’application disponible. Ouvrez {app} et activez son offre OpenCode.","offersUnknown":"Impossible de vérifier les applications disponibles. Actualisez pour réessayer.","detachGap":"Le détachement nécessite une commande de confiance de CodeNomad ; cet aperçu ne permet pas de le demander.",
+"docs":"Documentation","docsGap":"La documentation est présentée sous forme de texte ; la commande native dédiée à son ouverture reste à intégrer.","nonAffiliation":"Intégration indépendante, sans affiliation avec l’éditeur de l’application.","legacy":"Installation ancienne · consultez la documentation de migration de l’intégration.",
+"confirming":"Examinez la confirmation dans CodeNomad.","confirmed":"Action transmise. Son résultat effectif sera reflété dans l’état de l’intégration.","cancelled":"Action annulée.","expired":"Confirmation expirée. Aucune action n’a été répétée.","requestFailed":"La demande a échoué ou son résultat est incertain. Actualisez pour vérifier ; aucune action n’a été répétée.","busy":"Une autre demande est en attente ou l’hôte est occupé. Réessayez explicitement.","invalid":"L’hôte n’a pas pu accepter cette demande. Actualisez pour vérifier son état.",
+"protocol":"Compatibilité","appRequirement":"Application requise","catalogStatus":"Statut dans le catalogue","stable":"Stable","deprecated":"Obsolète","catalogPreview":"Aperçu","notAvailable":"Indisponible"
+},
+"de":{
+"heading":"Integrationen","refresh":"Aktualisieren","preview":"Entwicklungsvorschau · nicht veröffentlicht","summary":"{count} Integrationen · {active} bestätigt aktiv",
+"fresh":"Katalog aktuell","stale":"Katalog nicht verfügbar · letzter gültiger Katalog: {date}","unavailable":"Katalog nicht verfügbar","unknownDate":"Datum unbekannt","loading":"Integrationsstatus wird gelesen…",
+"noApi":"Diese Vorschau erfordert CodeNomad mit der Bundles-Bridge für API 4.","noSession":"Keine Unterhaltung angezeigt.","readFailed":"Status nicht verfügbar. Zum Wiederholen aktualisieren; es wurde keine Aktion erneut ausgeführt.","empty":"Keine Integrationen im verfügbaren Katalog.","updated":"Integrationsstatus aktualisiert.",
+"native":"In der Anwendung","vendor-mcp":"MCP des Anbieters","api":"API","plugin":"Plugin","description":"Beschreibung","version":"Installierte Version","versionUnknown":"Version unbekannt","notInstalled":"Nicht installiert","configured":"Konfiguriert","notConfigured":"Nicht konfiguriert",
+"scope":"Geltungsbereich","global":"Global","project":"Projekt","globalOnly":"Native Integrationen verwenden ausschließlich den Geltungsbereich „Global“.","enabled":"Aktiviert","disabled":"Deaktiviert","default":"Standard · Aktivierung unbestätigt","effective":"Tatsächliche Aktivierung",
+"install":"Installieren","update":"Aktualisieren","remove":"Entfernen","activate":"Aktivierung · {scope}","updateAvailable":"Plugin-Update verfügbar",
+"application":"Anwendung","host":"Anwendungskomponente","partVersion":"Installierte Komponentenversion","expected":"Erwartete Komponentenversion","appVersion":"Anwendungsversion","installHost":"In der Anwendung installieren","updateHost":"Anwendungskomponente aktualisieren",
+"machine":"Auf dem Rechner, auf dem OpenCode läuft.","openApp":"Öffnen Sie {app} und aktivieren Sie das OpenCode-Angebot, um die Anwendungskomponente zu prüfen.",
+"connection":"Verbindung","attachment":"Diese Unterhaltung","attached":"Zugeordnet","none":"Nicht zugeordnet","unknown":"Unbekannt","available":"Anwendung verfügbar","absent":"Nicht installiert","inactive":"Inaktiv","failed":"Fehlgeschlagen · siehe Plugins in CodeNomad","unsupported":"Nicht unterstützt","non-conforming":"Nicht konform","ok":"Bereit","outdated":"Update für Anwendungskomponente verfügbar","incompatible":"Inkompatibel","connected":"Verbunden","signed_out":"Abgemeldet","error":"Verbindungsfehler",
+"attach":"Dieser Unterhaltung zuordnen","noOffers":"Keine Anwendungsangebote verfügbar. Öffnen Sie {app} und aktivieren Sie das OpenCode-Angebot.","offersUnknown":"Verfügbare Anwendungen konnten nicht geprüft werden. Zum Wiederholen aktualisieren.","detachGap":"Zum Aufheben der Zuordnung ist ein vertrauenswürdiges CodeNomad-Bedienelement erforderlich; diese Vorschau kann dies nicht anfordern.",
+"docs":"Dokumentation","docsGap":"Die Dokumentation wird als Text angezeigt; die feste native Funktion zum Öffnen steht noch aus.","nonAffiliation":"Unabhängige Integration; keine Verbindung zum Anbieter der Anwendung.","legacy":"Ältere Installation · beachten Sie die Migrationsdokumentation der Integration.",
+"confirming":"Prüfen Sie die Bestätigung in CodeNomad.","confirmed":"Aktion übermittelt. Das tatsächliche Ergebnis wird im Integrationsstatus ersichtlich.","cancelled":"Aktion abgebrochen.","expired":"Bestätigung abgelaufen. Es wurde keine Aktion erneut ausgeführt.","requestFailed":"Die Anfrage ist fehlgeschlagen oder ihr Ergebnis ist ungewiss. Zur Prüfung aktualisieren; es wurde keine Aktion erneut ausgeführt.","busy":"Eine andere Anfrage steht aus oder der Host ist beschäftigt. Versuchen Sie es ausdrücklich erneut.","invalid":"Der Host konnte diese Anfrage nicht annehmen. Aktualisieren Sie, um den Status zu prüfen.",
+"protocol":"Kompatibilität","appRequirement":"Erforderliche Anwendung","catalogStatus":"Katalogstatus","stable":"Stabil","deprecated":"Veraltet","catalogPreview":"Vorschau","notAvailable":"Nicht verfügbar"
+},
+"es":{
+"heading":"Integraciones","refresh":"Actualizar","preview":"Vista previa de desarrollo · sin publicar","summary":"{count} integraciones · {active} con activación confirmada",
+"fresh":"Catálogo actualizado","stale":"Catálogo no disponible · último catálogo válido: {date}","unavailable":"Catálogo no disponible","unknownDate":"fecha desconocida","loading":"Leyendo el estado de las integraciones…",
+"noApi":"Esta vista previa requiere CodeNomad con el puente bundles de la API 4.","noSession":"No se muestra ninguna conversación.","readFailed":"Estado no disponible. Actualiza para reintentar; no se ha repetido ninguna acción.","empty":"No hay integraciones en el catálogo disponible.","updated":"Estados de las integraciones actualizados.",
+"native":"En la aplicación","vendor-mcp":"MCP del proveedor","api":"API","plugin":"Plugin","description":"Descripción","version":"Versión instalada","versionUnknown":"Versión desconocida","notInstalled":"No instalado","configured":"Configurado","notConfigured":"Sin configurar",
+"scope":"Ámbito","global":"Global","project":"Proyecto","globalOnly":"Las integraciones nativas solo usan el ámbito Global.","enabled":"Activado","disabled":"Desactivado","default":"Predeterminado · activación sin confirmar","effective":"Activación efectiva",
+"install":"Instalar","update":"Actualizar","remove":"Eliminar","activate":"Activación · {scope}","updateAvailable":"Actualización del plugin disponible",
+"application":"Aplicación","host":"Componente de la aplicación","partVersion":"Versión del componente instalado","expected":"Versión esperada del componente","appVersion":"Versión de la aplicación","installHost":"Instalar en la aplicación","updateHost":"Actualizar el componente de la aplicación",
+"machine":"En el equipo que ejecuta OpenCode.","openApp":"Abre {app} y activa su oferta de OpenCode para comprobar el componente de la aplicación.",
+"connection":"Conexión","attachment":"Esta conversación","attached":"Vinculado","none":"Sin vincular","unknown":"Desconocido","available":"Aplicación disponible","absent":"No instalado","inactive":"Inactivo","failed":"Error · consulta Plugins en CodeNomad","unsupported":"No admitido","non-conforming":"No conforme","ok":"Listo","outdated":"Actualización del componente de la aplicación disponible","incompatible":"Incompatible","connected":"Conectado","signed_out":"Sesión cerrada","error":"Error de conexión",
+"attach":"Vincular a esta conversación","noOffers":"No hay ofertas de aplicaciones disponibles. Abre {app} y activa su oferta de OpenCode.","offersUnknown":"No se han podido comprobar las aplicaciones disponibles. Actualiza para reintentar.","detachGap":"Para desvincular se necesita un control de confianza de CodeNomad; esta vista previa no permite solicitarlo.",
+"docs":"Documentación","docsGap":"La documentación se muestra como texto; el control nativo dedicado para abrirla está pendiente.","nonAffiliation":"Integración independiente, sin afiliación con el proveedor de la aplicación.","legacy":"Instalación antigua · consulta la documentación de migración de la integración.",
+"confirming":"Revisa la confirmación en CodeNomad.","confirmed":"Acción enviada. Su resultado efectivo se reflejará en el estado de la integración.","cancelled":"Acción cancelada.","expired":"La confirmación ha caducado. No se ha repetido ninguna acción.","requestFailed":"La solicitud ha fallado o su resultado es incierto. Actualiza para comprobarlo; no se ha repetido ninguna acción.","busy":"Hay otra solicitud pendiente o el host está ocupado. Vuelve a intentarlo de forma explícita.","invalid":"El host no ha podido aceptar esta solicitud. Actualiza para comprobar su estado.",
+"protocol":"Compatibilidad","appRequirement":"Aplicación requerida","catalogStatus":"Estado en el catálogo","stable":"Estable","deprecated":"Obsoleto","catalogPreview":"Vista previa","notAvailable":"No disponible"
+},
+"he":{
+"heading":"אינטגרציות","refresh":"רענון","preview":"תצוגה מקדימה בפיתוח · לא פורסמה","summary":"{count} אינטגרציות · {active} עם הפעלה מאומתת",
+"fresh":"הקטלוג מעודכן","stale":"הקטלוג אינו זמין · הקטלוג התקין האחרון: {date}","unavailable":"הקטלוג אינו זמין","unknownDate":"תאריך לא ידוע","loading":"קריאת מצב האינטגרציות…",
+"noApi":"תצוגה מקדימה זו דורשת CodeNomad עם גשר bundles של API 4.","noSession":"לא מוצגת שיחה.","readFailed":"המצב אינו זמין. רעננו כדי לנסות שוב; אף פעולה לא בוצעה שוב.","empty":"אין אינטגרציות בקטלוג הזמין.","updated":"מצבי האינטגרציות רועננו.",
+"native":"בתוך היישום","vendor-mcp":"MCP של הספק","api":"API","plugin":"תוסף","description":"תיאור","version":"הגרסה המותקנת","versionUnknown":"גרסה לא ידועה","notInstalled":"לא מותקן","configured":"מוגדר","notConfigured":"לא מוגדר",
+"scope":"תחולה","global":"כללי","project":"פרויקט","globalOnly":"אינטגרציות מובנות משתמשות רק בתחולה «כללי».","enabled":"מופעל","disabled":"מושבת","default":"ברירת מחדל · ההפעלה לא אומתה","effective":"הפעלה בפועל",
+"install":"התקנה","update":"עדכון","remove":"הסרה","activate":"הפעלה · {scope}","updateAvailable":"זמין עדכון לתוסף",
+"application":"יישום","host":"רכיב היישום","partVersion":"גרסת הרכיב המותקן","expected":"גרסת הרכיב הנדרשת","appVersion":"גרסת היישום","installHost":"התקנה ביישום","updateHost":"עדכון רכיב היישום",
+"machine":"במחשב שבו פועל OpenCode.","openApp":"פתחו את {app} והפעילו את הצעת OpenCode שלו כדי לבדוק את רכיב היישום.",
+"connection":"חיבור","attachment":"שיחה זו","attached":"משויך","none":"לא משויך","unknown":"לא ידוע","available":"היישום זמין","absent":"לא מותקן","inactive":"לא פעיל","failed":"נכשל · ראו תוספים ב-CodeNomad","unsupported":"לא נתמך","non-conforming":"לא עומד בדרישות","ok":"מוכן","outdated":"זמין עדכון לרכיב היישום","incompatible":"לא תואם","connected":"מחובר","signed_out":"לא מחובר לחשבון","error":"שגיאת חיבור",
+"attach":"שיוך לשיחה זו","noOffers":"אין הצעות יישום זמינות. פתחו את {app} והפעילו את הצעת OpenCode שלו.","offersUnknown":"לא ניתן לבדוק אילו יישומים זמינים. רעננו כדי לנסות שוב.","detachGap":"ביטול השיוך דורש פקד מהימן של CodeNomad; לא ניתן לבקש זאת בתצוגה מקדימה זו.",
+"docs":"תיעוד","docsGap":"התיעוד מוצג כטקסט; הפקד המובנה הייעודי לפתיחתו עדיין ממתין למימוש.","nonAffiliation":"אינטגרציה עצמאית, ללא זיקה לספק היישום.","legacy":"התקנה ישנה · עיינו בתיעוד המעבר של האינטגרציה.",
+"confirming":"בדקו את האישור ב-CodeNomad.","confirmed":"הפעולה נשלחה. התוצאה בפועל תשתקף במצב האינטגרציה.","cancelled":"הפעולה בוטלה.","expired":"תוקף האישור פג. אף פעולה לא בוצעה שוב.","requestFailed":"הבקשה נכשלה או שהתוצאה שלה אינה ודאית. רעננו כדי לבדוק; אף פעולה לא בוצעה שוב.","busy":"בקשה אחרת ממתינה או שהמארח עסוק. נסו שוב באופן מפורש.","invalid":"המארח לא הצליח לקבל את הבקשה. רעננו כדי לבדוק את מצבה.",
+"protocol":"תאימות","appRequirement":"היישום הנדרש","catalogStatus":"מצב בקטלוג","stable":"יציב","deprecated":"מיושן","catalogPreview":"תצוגה מקדימה","notAvailable":"לא זמין"
+},
+"ja":{
+"heading":"連携","refresh":"更新","preview":"開発プレビュー · 未公開","summary":"連携 {count} 件 · 有効化を確認済み {active} 件",
+"fresh":"カタログは最新です","stale":"カタログを取得できません · 最後の有効なカタログ: {date}","unavailable":"カタログを取得できません","unknownDate":"日時不明","loading":"連携の状態を読み取り中…",
+"noApi":"このプレビューには、API 4のbundlesブリッジに対応したCodeNomadが必要です。","noSession":"表示中の会話はありません。","readFailed":"状態を取得できません。更新して再試行してください。操作は再実行されていません。","empty":"取得できたカタログに連携はありません。","updated":"連携の状態を更新しました。",
+"native":"アプリ内","vendor-mcp":"ベンダー提供のMCP","api":"API","plugin":"プラグイン","description":"説明","version":"インストール済みバージョン","versionUnknown":"バージョン不明","notInstalled":"未インストール","configured":"設定済み","notConfigured":"未設定",
+"scope":"適用範囲","global":"グローバル","project":"プロジェクト","globalOnly":"ネイティブ連携は「グローバル」の適用範囲のみ使用します。","enabled":"有効","disabled":"無効","default":"デフォルト · 有効化は未確認","effective":"実際の有効化状態",
+"install":"インストール","update":"更新","remove":"削除","activate":"有効化 · {scope}","updateAvailable":"プラグインの更新があります",
+"application":"アプリ","host":"アプリ側のコンポーネント","partVersion":"インストール済みコンポーネントのバージョン","expected":"必要なコンポーネントのバージョン","appVersion":"アプリのバージョン","installHost":"アプリにインストール","updateHost":"アプリ側のコンポーネントを更新",
+"machine":"OpenCodeが動作しているマシン上で実行します。","openApp":"{app}を開き、OpenCodeへの提供機能を有効にして、アプリ側のコンポーネントを確認してください。",
+"connection":"接続","attachment":"この会話","attached":"関連付け済み","none":"未関連付け","unknown":"不明","available":"アプリを利用可能","absent":"未インストール","inactive":"非アクティブ","failed":"失敗 · CodeNomadの「プラグイン」を確認してください","unsupported":"未対応","non-conforming":"要件に不適合","ok":"準備完了","outdated":"アプリ側のコンポーネントの更新があります","incompatible":"互換性なし","connected":"接続済み","signed_out":"サインアウト済み","error":"接続エラー",
+"attach":"この会話に関連付ける","noOffers":"利用可能なアプリの提供機能がありません。{app}を開き、OpenCodeへの提供機能を有効にしてください。","offersUnknown":"利用可能なアプリを確認できませんでした。更新して再試行してください。","detachGap":"関連付けの解除には、CodeNomadの信頼できる操作機能が必要です。このプレビューからは解除を要求できません。",
+"docs":"ドキュメント","docsGap":"ドキュメントはテキストで表示されます。専用のネイティブ機能で開く操作は未実装です。","nonAffiliation":"独立した連携であり、アプリの提供元とは提携していません。","legacy":"旧方式のインストール · 連携の移行ドキュメントを参照してください。",
+"confirming":"CodeNomadの確認画面を確認してください。","confirmed":"操作を送信しました。実際の結果は連携の状態に反映されます。","cancelled":"操作をキャンセルしました。","expired":"確認の有効期限が切れました。操作は再実行されていません。","requestFailed":"リクエストが失敗したか、結果が不確かです。更新して確認してください。操作は再実行されていません。","busy":"別のリクエストが保留中か、ホストが処理中です。再試行するには、もう一度操作してください。","invalid":"ホストがこのリクエストを受け付けられませんでした。更新して状態を確認してください。",
+"protocol":"互換性","appRequirement":"必要なアプリ","catalogStatus":"カタログ上の状態","stable":"安定版","deprecated":"非推奨","catalogPreview":"プレビュー","notAvailable":"利用不可"
+},
+"ne":{
+"heading":"एकीकरणहरू","refresh":"रिफ्रेस","preview":"विकास पूर्वावलोकन · प्रकाशित गरिएको छैन","summary":"{count} एकीकरण · {active} को सक्रियता पुष्टि भएको",
+"fresh":"क्याटलग अद्यावधिक छ","stale":"क्याटलग उपलब्ध छैन · पछिल्लो मान्य क्याटलग: {date}","unavailable":"क्याटलग उपलब्ध छैन","unknownDate":"मिति अज्ञात","loading":"एकीकरणको स्थिति पढिँदै…",
+"noApi":"यो पूर्वावलोकनका लागि bundles API 4 ब्रिज भएको CodeNomad चाहिन्छ।","noSession":"कुनै कुराकानी देखाइएको छैन।","readFailed":"स्थिति उपलब्ध छैन। फेरि प्रयास गर्न रिफ्रेस गर्नुहोस्; कुनै पनि कार्य दोहोर्‍याइएको छैन।","empty":"उपलब्ध क्याटलगमा कुनै एकीकरण छैन।","updated":"एकीकरणहरूको स्थिति रिफ्रेस गरियो।",
+"native":"एपभित्र","vendor-mcp":"विक्रेताको MCP","api":"API","plugin":"प्लगइन","description":"विवरण","version":"स्थापित संस्करण","versionUnknown":"संस्करण अज्ञात","notInstalled":"स्थापित छैन","configured":"कन्फिगर गरिएको","notConfigured":"कन्फिगर नगरिएको",
+"scope":"दायरा","global":"विश्वव्यापी","project":"परियोजना","globalOnly":"नेटिभ एकीकरणहरूले विश्वव्यापी दायरा मात्र प्रयोग गर्छन्।","enabled":"सक्रिय","disabled":"निष्क्रिय","default":"पूर्वनिर्धारित · सक्रियता पुष्टि भएको छैन","effective":"वास्तविक सक्रियता",
+"install":"स्थापना गर्नुहोस्","update":"अद्यावधिक गर्नुहोस्","remove":"हटाउनुहोस्","activate":"सक्रियता · {scope}","updateAvailable":"प्लगइनको अद्यावधिक उपलब्ध छ",
+"application":"एप","host":"एपको कम्पोनेन्ट","partVersion":"स्थापित कम्पोनेन्टको संस्करण","expected":"अपेक्षित कम्पोनेन्ट संस्करण","appVersion":"एपको संस्करण","installHost":"एपमा स्थापना गर्नुहोस्","updateHost":"एपको कम्पोनेन्ट अद्यावधिक गर्नुहोस्",
+"machine":"OpenCode चलिरहेको कम्प्युटरमा।","openApp":"एपको कम्पोनेन्ट जाँच गर्न {app} खोल्नुहोस् र त्यसको OpenCode प्रस्ताव सक्रिय गर्नुहोस्।",
+"connection":"जडान","attachment":"यो कुराकानी","attached":"संलग्न","none":"संलग्न छैन","unknown":"अज्ञात","available":"एप उपलब्ध छ","absent":"स्थापित छैन","inactive":"निष्क्रिय","failed":"असफल · CodeNomad मा प्लगइनहरू हेर्नुहोस्","unsupported":"समर्थित छैन","non-conforming":"मापदण्डअनुरूप छैन","ok":"तयार","outdated":"एपको कम्पोनेन्टको अद्यावधिक उपलब्ध छ","incompatible":"असंगत","connected":"जडान भएको","signed_out":"साइन आउट गरिएको","error":"जडान त्रुटि",
+"attach":"यो कुराकानीमा संलग्न गर्नुहोस्","noOffers":"एपका कुनै प्रस्ताव उपलब्ध छैनन्। {app} खोल्नुहोस् र त्यसको OpenCode प्रस्ताव सक्रिय गर्नुहोस्।","offersUnknown":"उपलब्ध एपहरू जाँच गर्न सकिएन। फेरि प्रयास गर्न रिफ्रेस गर्नुहोस्।","detachGap":"संलग्नता हटाउन CodeNomad को विश्वसनीय नियन्त्रण चाहिन्छ; यो पूर्वावलोकनबाट त्यसको अनुरोध गर्न सकिँदैन।",
+"docs":"दस्तावेज","docsGap":"दस्तावेज पाठका रूपमा देखाइएको छ; खोल्नका लागि समर्पित नेटिभ नियन्त्रण थप्न बाँकी छ।","nonAffiliation":"स्वतन्त्र एकीकरण; एपको विक्रेतासँग सम्बद्ध छैन।","legacy":"पुरानो स्थापना · एकीकरणको माइग्रेसन दस्तावेज हेर्नुहोस्।",
+"confirming":"CodeNomad मा पुष्टिकरण समीक्षा गर्नुहोस्।","confirmed":"कार्य पठाइयो। यसको वास्तविक नतिजा एकीकरणको स्थितिमा देखिनेछ।","cancelled":"कार्य रद्द गरियो।","expired":"पुष्टिकरणको म्याद सकियो। कुनै पनि कार्य दोहोर्‍याइएको छैन।","requestFailed":"अनुरोध असफल भयो वा यसको नतिजा अनिश्चित छ। जाँच गर्न रिफ्रेस गर्नुहोस्; कुनै पनि कार्य दोहोर्‍याइएको छैन।","busy":"अर्को अनुरोध विचाराधीन छ वा होस्ट व्यस्त छ। फेरि प्रयास गर्न आफैँ अनुरोध गर्नुहोस्।","invalid":"होस्टले यो अनुरोध स्वीकार गर्न सकेन। यसको स्थिति जाँच गर्न रिफ्रेस गर्नुहोस्।",
+"protocol":"अनुकूलता","appRequirement":"आवश्यक एप","catalogStatus":"क्याटलगमा स्थिति","stable":"स्थिर","deprecated":"प्रयोग निरुत्साहित","catalogPreview":"पूर्वावलोकन","notAvailable":"उपलब्ध छैन"
+},
+"ru":{
+"heading":"Интеграции","refresh":"Обновить","preview":"Предварительная версия в разработке · не опубликована","summary":"Интеграций: {count} · подтверждённо активных: {active}",
+"fresh":"Каталог актуален","stale":"Каталог недоступен · последний корректный каталог: {date}","unavailable":"Каталог недоступен","unknownDate":"дата неизвестна","loading":"Чтение состояния интеграций…",
+"noApi":"Для этой предварительной версии нужен CodeNomad с мостом bundles API 4.","noSession":"Нет отображаемого разговора.","readFailed":"Состояние недоступно. Обновите для повтора; ни одно действие не было выполнено повторно.","empty":"В доступном каталоге нет интеграций.","updated":"Состояния интеграций обновлены.",
+"native":"В приложении","vendor-mcp":"MCP поставщика","api":"API","plugin":"Плагин","description":"Описание","version":"Установленная версия","versionUnknown":"Версия неизвестна","notInstalled":"Не установлено","configured":"Настроено","notConfigured":"Не настроено",
+"scope":"Область действия","global":"Глобально","project":"Проект","globalOnly":"Встроенные интеграции используют только область «Глобально».","enabled":"Включено","disabled":"Выключено","default":"По умолчанию · активация не подтверждена","effective":"Фактическая активация",
+"install":"Установить","update":"Обновить","remove":"Удалить","activate":"Активация · {scope}","updateAvailable":"Доступно обновление плагина",
+"application":"Приложение","host":"Компонент приложения","partVersion":"Версия установленного компонента","expected":"Ожидаемая версия компонента","appVersion":"Версия приложения","installHost":"Установить в приложение","updateHost":"Обновить компонент приложения",
+"machine":"На компьютере, где работает OpenCode.","openApp":"Откройте {app} и включите предложение OpenCode, чтобы проверить компонент приложения.",
+"connection":"Соединение","attachment":"Этот разговор","attached":"Привязано","none":"Не привязано","unknown":"Неизвестно","available":"Приложение доступно","absent":"Не установлено","inactive":"Неактивно","failed":"Сбой · см. «Плагины» в CodeNomad","unsupported":"Не поддерживается","non-conforming":"Не соответствует требованиям","ok":"Готово","outdated":"Доступно обновление компонента приложения","incompatible":"Несовместимо","connected":"Подключено","signed_out":"Вход в аккаунт не выполнен","error":"Ошибка соединения",
+"attach":"Привязать к этому разговору","noOffers":"Нет доступных предложений приложений. Откройте {app} и включите предложение OpenCode.","offersUnknown":"Не удалось проверить доступные приложения. Обновите для повтора.","detachGap":"Для отвязки нужен доверенный элемент управления CodeNomad; эта предварительная версия не позволяет её запросить.",
+"docs":"Документация","docsGap":"Документация отображается в виде текста; специальный встроенный механизм открытия ещё не реализован.","nonAffiliation":"Независимая интеграция, не связанная с поставщиком приложения.","legacy":"Установка старого типа · см. документацию по миграции интеграции.",
+"confirming":"Проверьте подтверждение в CodeNomad.","confirmed":"Действие отправлено. Фактический результат будет отражён в состоянии интеграции.","cancelled":"Действие отменено.","expired":"Срок подтверждения истёк. Ни одно действие не было выполнено повторно.","requestFailed":"Запрос завершился с ошибкой или его результат неизвестен. Обновите для проверки; ни одно действие не было выполнено повторно.","busy":"Другой запрос ожидает выполнения или хост занят. Повторите попытку явно.","invalid":"Хост не смог принять этот запрос. Обновите, чтобы проверить его состояние.",
+"protocol":"Совместимость","appRequirement":"Требуемое приложение","catalogStatus":"Статус в каталоге","stable":"Стабильная версия","deprecated":"Устарело","catalogPreview":"Предварительная версия","notAvailable":"Недоступно"
+},
+"tr":{
+"heading":"Entegrasyonlar","refresh":"Yenile","preview":"Geliştirme önizlemesi · yayımlanmadı","summary":"{count} entegrasyon · {active} tanesinin etkinliği doğrulandı",
+"fresh":"Katalog güncel","stale":"Katalog kullanılamıyor · son geçerli katalog: {date}","unavailable":"Katalog kullanılamıyor","unknownDate":"tarih bilinmiyor","loading":"Entegrasyon durumu okunuyor…",
+"noApi":"Bu önizleme, bundles API 4 köprüsünü destekleyen CodeNomad gerektirir.","noSession":"Görüntülenen konuşma yok.","readFailed":"Durum kullanılamıyor. Yenileyip tekrar deneyin; hiçbir işlem tekrarlanmadı.","empty":"Mevcut katalogda entegrasyon yok.","updated":"Entegrasyon durumları yenilendi.",
+"native":"Uygulama içinde","vendor-mcp":"Üreticinin MCP’si","api":"API","plugin":"Eklenti","description":"Açıklama","version":"Yüklü sürüm","versionUnknown":"Sürüm bilinmiyor","notInstalled":"Yüklü değil","configured":"Yapılandırılmış","notConfigured":"Yapılandırılmamış",
+"scope":"Kapsam","global":"Genel","project":"Proje","globalOnly":"Yerel entegrasyonlar yalnızca Genel kapsamını kullanır.","enabled":"Etkin","disabled":"Devre dışı","default":"Varsayılan · etkinlik doğrulanmadı","effective":"Fiilî etkinlik durumu",
+"install":"Yükle","update":"Güncelle","remove":"Kaldır","activate":"Etkinleştirme · {scope}","updateAvailable":"Eklenti güncellemesi mevcut",
+"application":"Uygulama","host":"Uygulama bileşeni","partVersion":"Yüklü bileşen sürümü","expected":"Beklenen bileşen sürümü","appVersion":"Uygulama sürümü","installHost":"Uygulamaya yükle","updateHost":"Uygulama bileşenini güncelle",
+"machine":"OpenCode’un çalıştığı bilgisayarda.","openApp":"Uygulama bileşenini denetlemek için {app} uygulamasını açıp OpenCode teklifini etkinleştirin.",
+"connection":"Bağlantı","attachment":"Bu konuşma","attached":"İlişkilendirilmiş","none":"İlişkilendirilmemiş","unknown":"Bilinmiyor","available":"Uygulama mevcut","absent":"Yüklü değil","inactive":"Etkin değil","failed":"Başarısız · CodeNomad’da Eklentiler bölümüne bakın","unsupported":"Desteklenmiyor","non-conforming":"Gerekliliklere uymuyor","ok":"Hazır","outdated":"Uygulama bileşeni güncellemesi mevcut","incompatible":"Uyumsuz","connected":"Bağlı","signed_out":"Oturum kapalı","error":"Bağlantı hatası",
+"attach":"Bu konuşmayla ilişkilendir","noOffers":"Kullanılabilir uygulama teklifi yok. {app} uygulamasını açıp OpenCode teklifini etkinleştirin.","offersUnknown":"Kullanılabilir uygulamalar denetlenemedi. Yenileyip tekrar deneyin.","detachGap":"İlişkilendirmeyi kaldırmak için güvenilir bir CodeNomad denetimi gerekir; bu önizlemeden böyle bir istek gönderilemez.",
+"docs":"Belgeler","docsGap":"Belgeler metin olarak gösterilir; açmak için ayrılmış yerel denetim henüz uygulanmadı.","nonAffiliation":"Bağımsız entegrasyon; uygulama üreticisiyle bağlantılı değildir.","legacy":"Eski kurulum · entegrasyonun geçiş belgelerine bakın.",
+"confirming":"CodeNomad’daki onayı inceleyin.","confirmed":"İşlem gönderildi. Fiilî sonuç entegrasyon durumuna yansıyacaktır.","cancelled":"İşlem iptal edildi.","expired":"Onayın süresi doldu. Hiçbir işlem tekrarlanmadı.","requestFailed":"İstek başarısız oldu veya sonucu belirsiz. Denetlemek için yenileyin; hiçbir işlem tekrarlanmadı.","busy":"Başka bir istek bekliyor veya ana makine meşgul. Yeniden denemek için isteği kendiniz tekrarlayın.","invalid":"Ana makine bu isteği kabul edemedi. Durumunu denetlemek için yenileyin.",
+"protocol":"Uyumluluk","appRequirement":"Gerekli uygulama","catalogStatus":"Katalog durumu","stable":"Kararlı","deprecated":"Kullanımı önerilmiyor","catalogPreview":"Önizleme","notAvailable":"Kullanılamıyor"
+},
+"zh":{
+"heading":"集成","refresh":"刷新","preview":"开发预览 · 尚未发布","summary":"{count} 项集成 · {active} 项已确认启用",
+"fresh":"目录已是最新","stale":"目录不可用 · 上次有效目录：{date}","unavailable":"目录不可用","unknownDate":"日期未知","loading":"正在读取集成状态…",
+"noApi":"此预览需要支持 bundles API 4 桥接的 CodeNomad。","noSession":"未显示对话。","readFailed":"状态不可用。请刷新重试；未重复执行任何操作。","empty":"可用目录中没有集成。","updated":"已刷新集成状态。",
+"native":"应用内","vendor-mcp":"厂商 MCP","api":"API","plugin":"插件","description":"描述","version":"已安装版本","versionUnknown":"版本未知","notInstalled":"未安装","configured":"已配置","notConfigured":"未配置",
+"scope":"作用域","global":"全局","project":"项目","globalOnly":"原生集成仅使用全局作用域。","enabled":"已启用","disabled":"已禁用","default":"默认 · 启用状态未确认","effective":"实际启用状态",
+"install":"安装","update":"更新","remove":"移除","activate":"启用设置 · {scope}","updateAvailable":"插件有可用更新",
+"application":"应用","host":"应用组件","partVersion":"已安装的组件版本","expected":"所需组件版本","appVersion":"应用版本","installHost":"在应用中安装","updateHost":"更新应用组件",
+"machine":"在运行 OpenCode 的计算机上。","openApp":"请打开 {app} 并启用其 OpenCode 接入功能，以检查应用组件。",
+"connection":"连接","attachment":"当前对话","attached":"已关联","none":"未关联","unknown":"未知","available":"应用可用","absent":"未安装","inactive":"未激活","failed":"失败 · 请查看 CodeNomad 中的“插件”","unsupported":"不支持","non-conforming":"不符合要求","ok":"已就绪","outdated":"应用组件有可用更新","incompatible":"不兼容","connected":"已连接","signed_out":"已退出登录","error":"连接错误",
+"attach":"关联到当前对话","noOffers":"没有可用的应用接入选项。请打开 {app} 并启用其 OpenCode 接入功能。","offersUnknown":"无法检查可用应用。请刷新重试。","detachGap":"解除关联需要使用 CodeNomad 的可信控件；此预览无法请求解除关联。",
+"docs":"文档","docsGap":"文档以文本形式显示；专用的原生打开功能尚待实现。","nonAffiliation":"独立集成，与应用厂商无关联。","legacy":"旧版安装 · 请查阅此集成的迁移文档。",
+"confirming":"请在 CodeNomad 中查看确认内容。","confirmed":"操作已提交。实际结果将反映在集成状态中。","cancelled":"操作已取消。","expired":"确认已过期。未重复执行任何操作。","requestFailed":"请求失败或结果不确定。请刷新以检查；未重复执行任何操作。","busy":"另有请求待处理或宿主正忙。请主动重试。","invalid":"宿主无法接受此请求。请刷新以检查状态。",
+"protocol":"兼容性","appRequirement":"所需应用","catalogStatus":"目录状态","stable":"稳定版","deprecated":"已弃用","catalogPreview":"预览版","notAvailable":"不可用"
+}
+}
+</script>
+<script>
+(() => {
+  const $=id=>document.getElementById(id), api=window.codenomad, T=JSON.parse($('i18n').textContent);
+  const rows=new Map(), requests=new Map();
+  let locale='en', context, catalog, snapshot, epoch=0, running=false, dirty=false, locked=false, noticeKey;
+  const t=(key,args={})=>(T[locale]?.[key]??T.en[key]??T.en.unknown).replace(/\{(\w+)\}/g,(_,key)=>String(args[key]??''));
+  const node=(tag,cls,text)=>{const value=document.createElement(tag);if(cls)value.className=cls;if(text!==undefined)value.textContent=text;return value;};
+  const button=(parent,key,run)=>{const value=node('button');value.type='button';value.dataset.action=key;value.onclick=()=>{if(value.getAttribute('aria-disabled')!=='true')run(value);};parent.append(value);return value;};
+  const pair=(list)=>{const dt=node('dt'),dd=node('dd');list.append(dt,dd);return {set:(key,value)=>{dt.textContent=t(key);dd.textContent=value??t('unknown');}};};
+  const announce=key=>{noticeKey=key;$('notice').textContent=t(key);};
+  function pending(value) {
+    locked=value;
+    for(const control of document.querySelectorAll('[data-manage]')) control.setAttribute('aria-disabled',String(value));
+  }
+  function fallback(trigger,row) {
+    // The native frame restores the exact surviving trigger. Handle hidden/removed origins only.
+    const mine=epoch;
+    setTimeout(()=>{
+      if(mine!==epoch)return;
+      if(trigger?.isConnected && trigger.getClientRects().length && !trigger.disabled)return;
+      (row?.disclosure.isConnected ? row.disclosure : $('refresh')).focus();
+    },32);
+  }
+  async function manage(row,trigger,method,input) {
+    if(locked || !context?.sessionId)return;
+    pending(true);
+    const mine=epoch;
+    try {
+      const result=await api.bundles[method](input);
+      if(mine!==epoch)return;
+      if(result?.outcome==='confirming' && typeof result.requestID==='string') {
+        requests.set(result.requestID,{trigger,row});announce('confirming');
+      } else {pending(false);announce(result?.outcome==='busy'?'busy':'invalid');}
+    } catch {if(mine===epoch){pending(false);announce('requestFailed');}}
+  }
+  function action(parent,row,key,method,input) {
+    const value=button(parent,key,trigger=>manage(row,trigger,method,input()));
+    value.dataset.manage='';return value;
+  }
+  function create(entry) {
+    const section=node('section','integration'), h=node('h2'), row={entry,section,open:false,offers:new Map()};
+    row.disclosure=button(h,'disclosure',()=>{
+      row.open=!row.open;disclose(row);
+      if(row.open && row.entry.family==='native')void refresh();
+    });
+    row.disclosure.className='disclosure';row.disclosure.id='title-'+entry.id;
+    row.name=node('span','name');row.family=node('span','badge-shape');row.version=node('span','muted');row.badge=node('span','badge-shape');
+    row.disclosure.append(row.name,row.family,row.version,row.badge);
+    row.body=node('div','body');row.body.id='body-'+entry.id;row.body.setAttribute('role','region');row.body.setAttribute('aria-labelledby',row.disclosure.id);
+    row.disclosure.setAttribute('aria-controls',row.body.id);section.append(h,row.body);
+    row.description=node('p');row.nonAffiliation=node('p','muted');row.docTitle=node('h3');row.docs=node('p','muted');row.docGap=node('p','muted');
+    row.body.append(row.description,row.nonAffiliation,row.docTitle,row.docs,row.docGap);
+    const plugin=node('div','group');row.pluginTitle=node('h3');row.pluginList=node('dl');
+    row.versionPair=pair(row.pluginList);row.configPair=pair(row.pluginList);row.effectivePair=pair(row.pluginList);
+    row.updateNote=node('p');row.globalOnly=node('p','muted');row.scopes=node('div','group');row.scopeControls=[];
+    row.installArea=node('div','row');row.installLabel=node('label');row.installScope=node('select');row.installScope.id='scope-'+entry.id;
+    row.installLabel.htmlFor=row.installScope.id;row.installArea.append(row.installLabel,row.installScope);
+    for(const scope of entry.family==='native'?['global']:['global','project']){const option=node('option');option.value=scope;row.installScope.append(option);}
+    row.install=action(row.installArea,row,'install','request',()=>({action:'install',integration:entry.id,scope:row.installScope.value}));
+    for(const scope of ['global','project']) {
+      const box=node('div','scope'),label=node('label'),check=node('input'),text=node('span');check.type='checkbox';
+      check.onchange=()=>{const state=row.state?.activation[scope]??'default';check.checked=state==='enabled';check.indeterminate=state==='default';
+        if(!locked)void manage(row,check,'setActive',{integration:entry.id,scope,enabled:state!=='enabled'});};
+      check.dataset.manage='';label.append(check,text);box.append(label);
+      const update=action(box,row,'update','request',()=>({action:'update',integration:entry.id,scope}));
+      const remove=action(box,row,'remove','request',()=>({action:'remove',integration:entry.id,scope}));
+      row.scopeControls.push({scope,box,check,text,update,remove});row.scopes.append(box);
+    }
+    plugin.append(row.pluginTitle,row.pluginList,row.updateNote,row.globalOnly,row.installArea,row.scopes);row.body.append(plugin);
+    row.app=node('div','group');row.appTitle=node('h3');row.hostList=node('dl');
+    row.hostPair=pair(row.hostList);row.partPair=pair(row.hostList);row.rangePair=pair(row.hostList);row.appVersionPair=pair(row.hostList);
+    row.installHost=action(row.app,row,'installHost','installHost',()=>({integration:entry.id}));row.machine=node('p','muted');row.openApp=node('p','muted');
+    row.app.prepend(row.appTitle,row.hostList);row.app.append(row.machine,row.openApp);row.body.append(row.app);
+    const connection=node('div','group');row.connectionTitle=node('h3');row.connection=node('p');row.offersHint=node('p','muted');row.detachGap=node('p','muted');row.offersList=node('div','offers');
+    row.requirement=node('p','muted');row.catalogStatus=node('p','muted');row.legacy=node('p','muted');
+    connection.append(row.connectionTitle,row.connection,row.requirement,row.offersHint,row.offersList,row.detachGap,row.legacy,row.catalogStatus);row.body.append(connection);
+    return row;
+  }
+  function disclose(row) {row.disclosure.setAttribute('aria-expanded',String(row.open));row.body.hidden=!row.open;}
+  function stateKey(state) {
+    if(!state)return 'unknown';
+    if(state.state!=='ok')return state.state;
+    if(state.family==='native') {
+      if(state.attachment.state==='attached')return 'attached';
+      const host=state.status?.host?.state;
+      if(host && host!=='ok')return host;
+      if((state.status?.connection?.offers??0)>0)return 'available';
+    }
+    if(state.family!=='native' && state.status?.connection?.state)return state.status.connection.state==='none'?'notAvailable':state.status.connection.state;
+    return 'ok';
+  }
+  function renderRow(row,entry,state) {
+    row.entry=entry;row.state=state;
+    const native=entry.family==='native',key=stateKey(state),host=state?.status?.host,rule=scope=>state?.activation[scope]??'default';
+    row.name.textContent=entry.displayName;row.family.textContent=t(entry.family);row.version.textContent=state?.version??(state?.configured===false?t('notInstalled'):t('versionUnknown'));
+    row.badge.textContent=state?.state==='ok' && host?.state==='absent'?t('application')+' · '+t(key):t(key);row.description.textContent=entry.summary[locale]??entry.summary.en;
+    row.nonAffiliation.textContent=t('nonAffiliation');row.docTitle.textContent=t('docs');row.docs.textContent=entry.docs;row.docGap.textContent=t('docsGap');
+    row.pluginTitle.textContent=t('plugin');row.versionPair.set('version',row.version.textContent);
+    row.configPair.set('scope',state?(state.configured?(state.scopes.map(scope=>t(scope)).join(' · ')||t('configured')):t('notConfigured')):t('unknown'));
+    row.effectivePair.set('effective',state?t(state.activation.effective):t('unknown'));
+    row.updateNote.textContent=t('updateAvailable');row.updateNote.hidden=!state?.outdated;
+    row.globalOnly.textContent=t('globalOnly');row.globalOnly.hidden=!native;
+    row.installArea.hidden=state?.configured!==false;row.installLabel.textContent=t('scope');row.install.textContent=t('install');
+    row.install.disabled=!context?.sessionId || catalog?.state==='unavailable';
+    for(const option of row.installScope.options)option.textContent=t(option.value);
+    for(const control of row.scopeControls) {
+      const {scope,box,check,text,update,remove}=control,configured=state?.scopes.includes(scope);
+      box.hidden=native && scope==='project';text.textContent=t(scope)+' · '+t(rule(scope));
+      check.checked=rule(scope)==='enabled';check.indeterminate=rule(scope)==='default';check.setAttribute('aria-label',t('activate',{scope:t(scope)}));
+      check.disabled=!state?.configured || !context?.sessionId || catalog?.state==='unavailable';
+      update.textContent=t('update');remove.textContent=t('remove');
+      update.hidden=!configured || !state?.outdated;remove.hidden=!configured;
+      for(const value of [update,remove])value.disabled=!state || !context?.sessionId || catalog?.state==='unavailable';
+    }
+    row.app.hidden=!native;row.appTitle.textContent=t('application');
+    row.hostPair.set('host',host?t(host.state):t('unknown'));row.partPair.set('partVersion',host?.partVersion);
+    row.rangePair.set('expected',host?.expectedRange);row.appVersionPair.set('appVersion',host?.appVersion);
+    const canInstall=state?.state==='ok' && (host?.state==='absent' && host.action==='install' || host?.state==='outdated' && host.action==='update' && host.partVersion);
+    row.installHost.hidden=!canInstall;row.installHost.disabled=!context?.sessionId || catalog?.state==='unavailable';
+    row.installHost.textContent=t(host?.state==='outdated'?'updateHost':'installHost');row.machine.textContent=t('machine');
+    row.openApp.hidden=host?.state!=='unknown' && !!host;row.openApp.textContent=t('openApp',{app:entry.app.name});
+    row.connectionTitle.textContent=t('connection');
+    row.connection.textContent=native?t('attachment')+': '+t(state?.attachment.state??'unknown')+(state?.attachment.label?' · '+state.attachment.label:'')
+      :t(state?.status?.connection?.state==='none'?'notAvailable':state?.status?.connection?.state??'unknown');
+    row.detachGap.textContent=t('detachGap');row.detachGap.hidden=!native || state?.attachment.state!=='attached';
+    row.requirement.textContent=t('appRequirement')+': '+entry.app.name+(entry.app.versions?' '+entry.app.versions:'');
+    row.catalogStatus.textContent=t('catalogStatus')+': '+t(entry.catalogStatus==='preview'?'catalogPreview':entry.catalogStatus);
+    row.legacy.textContent=t('legacy');row.legacy.hidden=!state?.status?.notices?.includes('legacy_install');
+    renderOffers(row);disclose(row);
+  }
+  function renderOffers(row) {
+    const native=row.entry.family==='native',result=row.hosts,state=row.state;
+    row.offersHint.hidden=!native;
+    row.offersHint.textContent=result?.offers.length?'':t(result?'noOffers':'offersUnknown',{app:row.entry.app.name});
+    const seen=new Set();
+    if(!result) {for(const item of row.offers.values())item.attach.disabled=true;return;}
+    for(const offer of result.offers) {
+      seen.add(offer.offerID);
+      let item=row.offers.get(offer.offerID);
+      if(!item) {const box=node('div','offer'),label=node('p'),description=node('p','muted');box.append(label,description);
+        const attach=action(box,row,'attach','attach',()=>({integration:row.entry.id,offerID:offer.offerID}));
+        item={box,label,description,attach};row.offers.set(offer.offerID,item);row.offersList.append(box);}
+      item.label.textContent=offer.label;
+      item.description.textContent=[offer.document,offer.appVersion,t('protocol')+': '+t(offer.protocol)].filter(Boolean).join(' · ');
+      item.attach.textContent=t('attach');item.attach.disabled=offer.protocol!=='ok' || !context?.sessionId || state?.state!=='ok'
+        || state?.status?.host?.state==='unsupported' || state?.attachment.state!=='none' || catalog?.state==='unavailable';
+    }
+    for(const [key,item] of row.offers)if(!seen.has(key)){const focused=item.box.contains(document.activeElement);item.box.remove();row.offers.delete(key);if(focused)row.disclosure.focus();}
+  }
+  function render() {
+    document.title=t('heading');$('heading').textContent=t('heading');$('refresh').setAttribute('aria-label',t('refresh'));$('preview').textContent=t('preview');
+    if(noticeKey)$('notice').textContent=t(noticeKey);
+    const list=catalog?.integrations??[],states=snapshot?.integrations??[];
+    const active=states.filter(state=>state.activation.effective==='enabled').length;
+    $('summary').textContent=t('summary',{count:list.length,active});
+    let date=t('unknownDate');if(catalog?.fetchedAt)date=new Intl.DateTimeFormat(locale,{dateStyle:'medium',timeStyle:'short'}).format(new Date(catalog.fetchedAt));
+    $('catalog').textContent=t(catalog?.state??'loading',{date});
+    if(!list.length)$('summary').textContent=catalog?t('empty'):'';
+    const seen=new Set();
+    let position=0;
+    for(const entry of list) {
+      seen.add(entry.id);let row=rows.get(entry.id);const state=states.find(value=>value.id===entry.id);
+      if(!row){row=create(entry);row.open=['absent','inactive','failed','unsupported','non-conforming','outdated','incompatible','unknown'].includes(stateKey(state))||!!state?.outdated;rows.set(entry.id,row);}
+      renderRow(row,entry,state);
+      if($('integrations').children[position]!==row.section)$('integrations').insertBefore(row.section,$('integrations').children[position]??null);
+      position++;
+    }
+    for(const [id,row] of rows)if(!seen.has(id)){const focused=row.section.contains(document.activeElement);row.section.remove();rows.delete(id);if(focused)$('refresh').focus();}
+    pending(locked);
+  }
+  async function refresh() {
+    if(!context?.sessionId || !api?.bundles)return;
+    if(running){dirty=true;return;}
+    running=true;const mine=epoch;
+    try {
+      const [nextCatalog,nextState]=await Promise.all([api.bundles.catalog(),api.bundles.state()]);
+      if(mine!==epoch)return;
+      catalog=nextCatalog;snapshot=nextState;
+      // An invalidation discards the offer snapshot before reading expanded native sections.
+      for(const row of rows.values())row.hosts=undefined;
+      render();
+      for(const row of rows.values())if(row.open && row.entry.family==='native' && row.state?.state==='ok') {
+        try {const hosts=await api.bundles.hosts({integration:row.entry.id});if(mine!==epoch)return;row.hosts=hosts;}catch {row.hosts=undefined;}
+        renderOffers(row);
+      }
+      if(!requests.size && ['',t('loading'),t('updated'),t('readFailed')].includes($('notice').textContent))announce('updated');
+    } catch {if(mine===epoch){snapshot=undefined;for(const row of rows.values())row.hosts=undefined;render();announce('readFailed');}}
+    finally {running=false;if(dirty){dirty=false;void refresh();}}
+  }
+  $('refresh').onclick=()=>void refresh();
+  if(!api?.bundles){render();announce('noApi');return;}
+  api.bundles.onChanged(change=>{
+    if(change.kind==='request') {
+      const request=requests.get(change.requestID);if(!request)return;
+      requests.delete(change.requestID);pending(false);announce(change.outcome==='failed'?'requestFailed':change.outcome);
+      fallback(request.trigger,request.row);
+    }
+    // Refreshes only read. Unknown or lost management outcomes are never replayed.
+    void refresh();
+  });
+  api.onContext(next=>{
+    const changed=context?.sessionId!==next.sessionId;context=next;
+    const requested=String(next.locale??'en').split('-')[0];locale=T[requested]?requested:'en';
+    document.documentElement.lang=locale;document.documentElement.dir=locale==='he'?'rtl':'ltr';document.documentElement.dataset.appearance=next.appearance??'light';
+    for(const [key,value] of Object.entries(next.colors??{})){
+      const target={background:'bg',surface:'surface',text:'ink',muted:'muted',border:'line',focus:'focus'}[key];
+      if(target && typeof value==='string' && CSS.supports('color',value))document.documentElement.style.setProperty('--'+target,value);
+    }
+    if(changed){epoch++;catalog=undefined;snapshot=undefined;noticeKey=undefined;$('notice').textContent='';requests.clear();pending(false);for(const row of rows.values())row.section.remove();rows.clear();}
+    render();if(!next.sessionId)announce('noSession');else if(changed)void refresh();
+  });
+})();
+</script>

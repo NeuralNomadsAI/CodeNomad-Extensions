@@ -1,0 +1,10 @@
+{
+  "id": "neuralnomads.bundles",
+  "name": "Intégrations",
+  "version": "0.1.0",
+  "apiVersion": 4,
+  "author": "NeuralNomadsAI",
+  "license": "MIT",
+  "repository": "https://github.com/NeuralNomadsAI/CodeNomad-Extensions",
+  "permissions": ["session.context", "bundles.read", "bundles.manage"]
+}

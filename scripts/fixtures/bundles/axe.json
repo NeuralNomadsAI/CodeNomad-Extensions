@@ -1,0 +1,7 @@
+{
+  "version": "4.11.0",
+  "tarball": "https://registry.npmjs.org/axe-core/-/axe-core-4.11.0.tgz",
+  "integrity": "sha512-ilYanEU8vxxBexpJd8cWM4ElSQq4QctCLKih0TSfjIfCQTeyH/6zVrmIJfLPrKTKJRbiG+cfnZbQIjAlJmF1jQ==",
+  "file": "package/axe.min.js",
+  "sha256": "e9e5863c33a874f09bc01acd9234b7e3c871479f5eef8802fa582544465e6d01"
+}

@@ -21,7 +21,13 @@
    `panel.preferences` (one small JSON object per installed addon), each at most
    once, in any order. Declare only the capabilities the panel uses; each one has
    its own install sentence. API 4 addons install only on a CodeNomad host
-   supporting extension API 4; other hosts list them as incompatible.
+    supporting extension API 4; other hosts list them as incompatible.
+    The unpublished Bundles development panel additionally requires a host with
+    the reviewed `bundles.read` / `bundles.manage` bridge; `bundles.manage` requires
+    `bundles.read`. Read exposes the reviewed integrations catalogue, displayed
+    conversation state and available application offers. Manage requests fixed
+    actions through the host's trusted confirmations. Its code-only draft and
+    remaining acceptance gates are documented in `extensions/bundles/README.md`.
 4. Publish a built ZIP with only root `manifest.json` and `panel.html`, not the
    repository source archive. Maximum ZIP/HTML size: 2 MiB; manifest: 4 KiB.
 5. Give every changed package a new semantic version and immutable GitHub Release
