@@ -7,7 +7,7 @@ manifest requests `session.context`, `bundles.read` and `bundles.manage`.
 ## Supported contract
 
 The panel targets CodeNomad commit
-`61382f7ec7ddcf68e190e8023644362457c227ea`: its bundles projection schemas,
+`bea9af583b88481f35b3470930d48458fecfdded`: its bundles projection schemas,
 fixed public bridge, archive validator and sandbox frame. A host implementing
 that contract is required. The panel uses HTML, CSS and JavaScript directly,
 with ten locale dictionaries, Hebrew RTL and the host's six colour roles.
@@ -18,9 +18,22 @@ and connection state. Native integrations have Global-only management,
 application component status, available offers and the current conversation's
 attachment. Installation offers a scope selector defaulting to Global.
 Activation uses native three-state checkboxes: mixed means Default, whose
-effective activation remains unconfirmed. The summary counts confirmed enabled
-states only. Missing package version, unavailable state and unknown attachment
-retain their distinct meanings.
+effective activation remains separate from native loading. The summary counts
+catalogue entries. Each plugin shows its declaration, native loading, effective
+activation and integration/RPC state independently. An undeclared yet loaded
+plugin remains visibly loaded; an ID-less failure remains failed. Missing
+package version leaves loading unchanged. Older hosts omitting the additive
+plugin facts show Unknown and withhold installation/attachment actions that
+need those facts; unknown attachment stays distinct from Not attached.
+
+The optional host-supplied `plugin` object carries `declared`, `runtime`
+(`active`, `failed`, `unloaded`, `unknown`) and optional `progress`
+(`pending`, `unconfirmed`). Installation progress is displayed only for a
+declared, unloaded, effectively enabled plugin. The trusted parent owns its
+120-second boundary; the iframe renders supplied hints and refreshes on events.
+It has no installation clock, cache or authority. Unconfirmed loading offers
+explicit Refresh and troubleshooting help. A late submission receipt leaves
+loading governed by the next state read.
 
 Install, update and remove call `bundles.request`; activation calls `setActive`;
 application installation calls `installHost`; attaching calls `attach`.
@@ -48,12 +61,17 @@ The ZIP contains root `manifest.json` and `panel.html` only; the adjacent
 `.sha256` identifies its exact deterministic bytes. No release, catalogue entry
 or publishing workflow is part of this draft.
 
-The browser check reads **the HTML returned from the packaged ZIP** through the
-real pinned validator and frame generator. Its host is simulated over a real
-MessagePort. It checks schemas, three families, errors/unknown/stale states,
+The browser check exports the six consumed runtime files directly from the
+immutable Git commit; checkout HEAD, index and working files are irrelevant.
+It reads **the HTML returned from the packaged ZIP** through the real pinned
+validator and frame generator. Its host is simulated over a real MessagePort.
+It checks schemas, three families, errors/unknown/stale states,
 keyboard/ARIA, scope selection, action admission without early success or replay,
 exact surviving iframe-trigger focus, fallback focus, context fences, lifecycle,
-all locales and narrow light/dark layouts. See
+all locales, supplied installation states, response ordering, reload/runtime
+loss, the 119,999/120,000/120,001-ms display boundaries and narrow light/dark
+layouts. These boundary checks verify the iframe retains the supplied hint;
+the parent tracker's actual expiry needs its own qualification. See
 [`scripts/fixtures/bundles/README.md`](../../scripts/fixtures/bundles/README.md)
 for optional fixture screenshots and integrity-pinned test-only axe 4.11.0 setup.
 Test tools stay outside the product archive.
@@ -62,11 +80,18 @@ Test tools stay outside the product archive.
 
 | Criterion | Development slice | Full E1 gate |
 |---|---|---|
-| AC-E1, sections and states | Actual packaged panel, schema-validated fixtures and real-iframe axe audit when configured | The bridge needs authoritative `pending` and installation-unconfirmed fields; the panel derives neither from timers nor missing versions. |
+| AC-E1, sections and states | Actual packaged panel consumes the pinned declaration/loading/progress contract; schema-valid states, older-host fallback, ten locales/RTL and real-iframe axe audit when configured | Qualify the actual ExtensionPanel/parent/backend together; supplied-progress tests exercise the external display slice. |
 | AC-E2, managed actions | Fixed public calls, admitted/submitted outcomes and state reconciliation checked with a simulated host | Run the actual archive through ExtensionPanel, trusted confirmations and native backend. Author `detach` is refused at the pinned trust boundary; a trusted D24 control/API placement requires review. |
 | AC-E3, accessibility | Keyboard, named regions, polite grouped updates, stable disclosures, exact surviving-trigger/fallback focus and both-palette axe checks | Manual screen-reader review; real host confirmation/iframe-unmount focus checks. Axe incomplete checks require explicit review. |
 | AC-E4, catalogue publication | Code-only draft PR | Explicit publication authorization, release and catalogue entry. |
 | §5.1, documentation | Safe non-navigating text | Fixed reviewed host documentation opener. |
+
+The configured check performs 29 checks and 38 axe audits across both palettes,
+including pending, unconfirmed, undeclared-loaded, ID-less failed, disabled and
+older-host states. Screenshots carry a synthetic-data/test-preview banner.
+Axe's Refresh-glyph contrast check remains incomplete; the test independently
+measures its foreground/background contrast in both palettes. Manual review
+remains part of AC-E3.
 
 The D24 placement remains an open host decision. This panel supplies no detach
 button, synthetic click proof, author confirmation or destructive direct message.

@@ -7,19 +7,19 @@ import assert from 'node:assert/strict';
 import {execFileSync} from 'node:child_process';
 import {createHash} from 'node:crypto';
 import {createRequire} from 'node:module';
-import {mkdtemp,readFile,rm,mkdir,writeFile} from 'node:fs/promises';
+import {mkdtemp,readFile,rm,mkdir,writeFile,symlink} from 'node:fs/promises';
 import {createServer} from 'node:http';
 import path from 'node:path';
 import os from 'node:os';
 import {fileURLToPath,pathToFileURL} from 'node:url';
-import {fixture,palettes} from './fixtures/bundles/data.mjs';
+import {fixture,palettes,installationFixture,installationStates} from './fixtures/bundles/data.mjs';
 
-const PIN='61382f7ec7ddcf68e190e8023644362457c227ea';
+const PIN='bea9af583b88481f35b3470930d48458fecfdded';
 assert(process.argv[2],'Usage: node scripts/test-bundles.mjs <pinned CodeNomad checkout>');
 const checkout=path.resolve(process.argv[2]);
 const root=fileURLToPath(new URL('..',import.meta.url));
 const git=(...args)=>execFileSync('git',args,{cwd:checkout,encoding:'utf8',windowsHide:true}).trim();
-assert.equal(git('rev-parse','HEAD'),PIN,'exact CodeNomad test pin');
+assert.equal(git('rev-parse',`${PIN}^{commit}`),PIN,'immutable CodeNomad test pin exists');
 const consumed=[
   'packages/ui/src/components/panel-extensions/frame-document.ts',
   'packages/server/src/panel-extensions/archive.ts',
@@ -28,21 +28,9 @@ const consumed=[
   'packages/server/src/opencode/integrations/contract.ts',
   'packages/server/src/opencode/integrations/status.ts',
 ];
-// Compare index AND disk (Git's checkout filters handle CRLF). Unrelated work is
-// irrelevant; every consumed local runtime source must be exactly its pinned blob.
 const sourceHashes={};
-for(const file of consumed){
-  const expected=git('rev-parse',`${PIN}:${file}`);
-  assert.equal(git('rev-parse',`:${file}`),expected,`clean consumed index: ${file}`);
-  assert.equal(git('hash-object','--path',file,file),expected,`clean consumed file: ${file}`);
-  sourceHashes[file]=expected;
-}
 const require=createRequire(path.join(checkout,'package.json'));
 const {chromium}=require('playwright'),{tsImport}=require('tsx/esm/api');
-const load=file=>tsImport(pathToFileURL(path.join(checkout,file)).href,import.meta.url);
-const {panelExtensionDocument,PANEL_EXTENSION_SANDBOX}=await load(consumed[0]);
-const {readPanelExtensionArchive}=await load(consumed[1]);
-const schemas=await load(consumed[3]);
 const LOCALES=['en','fr','de','es','he','ja','ne','ru','tr','zh'];
 const axePin=JSON.parse(await readFile(new URL('./fixtures/bundles/axe.json',import.meta.url),'utf8'));
 const failures=[],results=[],audits=[],captures=[],errors=[];
@@ -51,6 +39,22 @@ const tempRoot=path.join(os.tmpdir(),'opencode');await mkdir(tempRoot,{recursive
 const tmp=await mkdtemp(path.join(tempRoot,'bundles-test-'));
 let browser,server;
 try {
+  // Export exact Git blobs, never mutable HEAD/index/worktree sources. Only the
+  // already-installed test dependencies are borrowed from the supplied checkout.
+  const exported=path.join(tmp,'contract');
+  for(const file of consumed){
+    const bytes=execFileSync('git',['show',`${PIN}:${file}`],{cwd:checkout,windowsHide:true});
+    const expected=git('rev-parse',`${PIN}:${file}`);
+    assert.equal(createHash('sha1').update(`blob ${bytes.length}\0`).update(bytes).digest('hex'),expected);
+    sourceHashes[file]=expected;
+    const target=path.join(exported,file);await mkdir(path.dirname(target),{recursive:true});await writeFile(target,bytes);
+  }
+  await writeFile(path.join(exported,'package.json'),'{"type":"module"}\n');
+  await symlink(path.join(checkout,'node_modules'),path.join(exported,'node_modules'),process.platform==='win32'?'junction':'dir');
+  const load=file=>tsImport(pathToFileURL(path.join(exported,file)).href,import.meta.url);
+  const {panelExtensionDocument,PANEL_EXTENSION_SANDBOX}=await load(consumed[0]);
+  const {readPanelExtensionArchive}=await load(consumed[1]);
+  const schemas=await load(consumed[3]);
   const source=path.join(root,'extensions/bundles');
   const html=(await readFile(path.join(source,'panel.html'),'utf8')).replace(/\r\n/g,'\n');
   const manifest=JSON.parse(await readFile(path.join(source,'manifest.json'),'utf8'));
@@ -70,8 +74,8 @@ try {
     assert.match(pkg.html,/MIT License — Copyright \(c\) 2026 NeuralNomadsAI/);
   });
   assert(pkg,'cannot run author bytes without successful archive validation');
-  await test('10 actual locale dictionaries, exactly 85 keys, nonempty strings and placeholder parity',async()=>{
-    assert.deepEqual(Object.keys(T).sort(),[...LOCALES].sort());assert.equal(Object.keys(T.en).length,85);
+  await test('10 actual locale dictionaries, exactly 95 keys, nonempty strings and placeholder parity',async()=>{
+    assert.deepEqual(Object.keys(T).sort(),[...LOCALES].sort());assert.equal(Object.keys(T.en).length,95);
     const marks=value=>[...value.matchAll(/\{\w+\}/g)].map(match=>match[0]).sort();
     for(const locale of LOCALES){assert.deepEqual(Object.keys(T[locale]).sort(),Object.keys(T.en).sort(),locale);
       for(const [key,value] of Object.entries(T.en)){assert.equal(typeof T[locale][key],'string');assert(T[locale][key].trim(),`${locale}.${key}`);assert.deepEqual(marks(T[locale][key]),marks(value),`${locale}.${key}`);}}
@@ -100,6 +104,14 @@ try {
     assert.throws(()=>validateWire({capability:'bundles',method:'attach',input:{integration:'studio',offerID:'short'}}));
     assert.throws(()=>validateWire({capability:'bundles',method:'setActive',input:{integration:'studio',scope:'global',enabled:'yes'}}));
     assert.throws(()=>validateWire({capability:'bundles',method:'request',input:{integration:'studio',scope:'global',action:'install',sessionID:'ses_other'}}));
+    for(const kind of installationStates)validateFixture(installationFixture(kind));
+    for(const plugin of [{declared:'yes',runtime:'active'},{declared:true,runtime:'pending'},{declared:true,runtime:'unloaded',progress:'expired'},
+      {declared:true,runtime:'failed',runtimeID:'private'}, {declared:true,runtime:'active',target:'private'}]){
+      const invalid=fixture();invalid.state.integrations[0].plugin=plugin;
+      assert.equal(schemas.bundlesStateResultSchema.safeParse(invalid.state).success,false);
+    }
+    const privateState=fixture();privateState.state.tracking={directory:'private'};
+    assert.equal(schemas.bundlesStateResultSchema.safeParse(privateState.state).success,false,'host-private correlation stays outside author projection');
   });
   const doc=panelExtensionDocument(pkg.html,'bundles-fixture',pkg.manifest.apiVersion,pkg.manifest.permissions);
   assert.equal(PANEL_EXTENSION_SANDBOX,'allow-scripts');
@@ -137,6 +149,7 @@ try {
   const notice=async(view,key)=>{await view.frame.locator('#notice').filter({hasText:T.en[key]}).waitFor();};
   const expand=async(view,id)=>{const button=view.frame.locator('#title-'+id);if(await button.getAttribute('aria-expanded')!=='true')await button.click();await settle(view);};
   const isFocused=locator=>locator.evaluate(node=>node===document.activeElement);
+  const field=(view,key)=>view.frame.locator('#body-studio dt').filter({hasText:new RegExp('^'+T.en[key]+'$')}).evaluate(node=>node.nextElementSibling.textContent);
   const mutations=view=>view.host(()=>H.calls.filter(call=>!['catalog','state','hosts'].includes(call.method)));
   async function capture(view,name){
     if(!process.env.CODENOMAD_PANEL_CAPTURE_DIR)return;
@@ -154,7 +167,7 @@ try {
   await isolated('real packaged iframe sandbox, bridge surface, 3 families, default not confirmed; missing version not absence',async v=>{
     assert.equal(await v.page.locator('iframe').getAttribute('sandbox'),'allow-scripts');
     assert.equal(await v.frame.locator('.integration').count(),3);
-    assert.equal(await v.frame.locator('#summary').textContent(),'3 integrations · 0 confirmed active');
+    assert.equal(await v.frame.locator('#summary').textContent(),'3 integrations');
     assert.deepEqual(await v.frame.locator('body').evaluate(()=>Object.keys(codenomad.bundles).sort()),['attach','catalog','detach','hosts','installHost','onChanged','request','setActive','state']);
     assert.deepEqual(await v.frame.locator('body').evaluate(()=>Object.keys(codenomad).sort()),['apiVersion','bundles','getContext','onContext']);
     const native=v.frame.locator(row('studio'));assert.match(await native.textContent(),/Version unknown/);
@@ -172,7 +185,9 @@ try {
   await isolated('runtime unknown/absent/inactive/failed/unsupported/non-conforming, stale/unavailable catalog and host states',async v=>{
     for(const state of ['unknown','absent','inactive','failed','unsupported','non-conforming']){
       const f=fixture(),native=f.state.integrations[0];native.state=state;delete native.version;delete native.status;
-      if(state==='absent'){native.configured=false;native.scopes=[];}
+      if(state==='absent'){native.configured=false;native.scopes=[];native.plugin={declared:false,runtime:'unloaded'};}
+      if(state==='inactive')native.plugin={declared:true,runtime:'unloaded'};
+      if(state==='failed')native.plugin={declared:true,runtime:'failed'};
       await refresh(v,f);
       assert.equal(await v.frame.locator('#title-studio .badge-shape').last().textContent(),T.en[state]);
       assert.equal(await v.frame.locator('#title-studio .muted').textContent(),state==='absent'?T.en.notInstalled:T.en.versionUnknown);
@@ -192,6 +207,65 @@ try {
     assert.equal(await v.frame.locator('#catalog').textContent(),T.en.unavailable);
     for(const control of await v.frame.locator('[data-manage]').all())assert.equal(await control.isDisabled(),true);
     await capture(v,'unavailable');
+  });
+
+  await isolated('separate declaration, native loading, activation and RPC facts; ID-less failure, missing version and older hosts',async v=>{
+    const badges={pending:'pending',unconfirmed:'unconfirmed',unloaded:'inactive',absent:'absent','active-no-version':'outdated','undeclared-active':'outdated','failed-no-id':'failed',disabled:'disabled',ambiguous:'unknown','older-host':'unknown'};
+    for(const kind of installationStates){
+      const f=installationFixture(kind),native=f.state.integrations[0];await refresh(v,f);
+      assert.equal(await v.frame.locator('#title-studio .badge-shape').last().textContent(),T.en[badges[kind]],kind);
+      assert.equal(await field(v,'declaration'),T.en[native.plugin?(native.plugin.declared?'declared':'notDeclared'):'unknown']);
+      assert.equal(await field(v,'runtime'),T.en[native.plugin?.runtime==='active'?'loaded':native.plugin?.runtime??'unknown']);
+      assert.equal(await field(v,'rpcStatus'),T.en[native.state]);
+      assert.equal(await v.frame.locator('#title-studio .muted').textContent(),kind==='absent'?T.en.notInstalled:T.en.versionUnknown);
+      assert.equal(await action(v.frame,'studio','install').count(),kind==='absent'?1:0,'no duplicate or inferred install');
+      assert.equal(await action(v.frame,'studio','installHost').count(),['active-no-version','undeclared-active'].includes(kind)?1:0);
+      assert.equal(await v.frame.locator(body('studio')).getByText(T.en.unconfirmedHelp,{exact:true}).isVisible(),kind==='unconfirmed');
+      assert.match(await v.frame.locator(body('studio')).textContent(),/This conversation: Unknown/,'unknown attachment never becomes none');
+    }
+    // The strict schema bounds shape; defensive display also ignores progress
+    // when its parent facts do not authorize that interpretation.
+    for(const kind of ['disabled','ambiguous','absent','active-no-version']){
+      const f=installationFixture(kind);f.state.integrations[0].plugin.progress='pending';await refresh(v,f);
+      assert.equal(await v.frame.locator('#title-studio .badge-shape').last().textContent(),T.en[badges[kind]]);
+    }
+    const old=fixture();delete old.state.integrations[0].plugin;await refresh(v,old);
+    assert.equal(await field(v,'runtime'),T.en.unknown);assert.equal(await action(v.frame,'studio','installHost').count(),0);
+    const disabled=fixture();disabled.state.integrations[0].activation.effective='disabled';
+    disabled.state.integrations[0].status.host={state:'absent',action:'install'};await refresh(v,disabled);
+    assert.equal(await v.frame.locator('#title-studio .badge-shape').last().textContent(),T.en.disabled,'effective disable overrides default rules and stale host status');
+    assert.equal(await action(v.frame,'studio','installHost').count(),0);
+    assert.equal((await mutations(v)).length,0);
+  });
+
+  await isolated('parent-only pending boundaries, late confirmed receipt, response order, runtime loss and reload never invent loading',async v=>{
+    await refresh(v,installationFixture('absent'));
+    await action(v.frame,'studio','install').click();await notice(v,'confirming');
+    const pending=installationFixture('pending');await refresh(v,pending);
+    const calls=await v.host(()=>H.calls.length);
+    for(const ms of [119_999,1,1]){
+      await v.page.clock.fastForward(ms);await settle(v);
+      assert.equal(await v.frame.locator('#title-studio .badge-shape').last().textContent(),T.en.pending);
+      assert.equal(await v.host(()=>H.calls.length),calls,'no iframe expiry/read clock');
+    }
+    await refresh(v,installationFixture('unconfirmed'));
+    await v.host(()=>H.finish('confirmed'));await notice(v,'confirmed');await settle(v);
+    assert.equal(await v.frame.locator('#title-studio .badge-shape').last().textContent(),T.en.unconfirmed,'late receipt is submitted, not loaded/pending');
+    const trigger=v.frame.locator('#body-studio input').first();await trigger.focus();await trigger.evaluate(node=>window.savedTrigger=node);
+    await v.host(()=>{H.hold=['catalog'];H.changed({kind:'state'});});await v.page.waitForFunction(()=>H.held.length===1);
+    const active=installationFixture('active-no-version');validateFixture(active);
+    await v.host(value=>{Object.assign(H,value);H.changed({kind:'state'});},active);
+    await v.host(()=>H.release());await settle(v);
+    assert.equal(await field(v,'runtime'),T.en.loaded,'trailing authoritative read wins after reverse response order');
+    assert.equal(await trigger.evaluate(node=>node===window.savedTrigger&&node===document.activeElement),true);
+    const gone=installationFixture('unconfirmed');await refresh(v,gone);
+    assert.equal(await field(v,'runtime'),T.en.unloaded);assert.equal(await action(v.frame,'studio','installHost').count(),0);
+    assert.equal(await v.frame.locator('#title-studio').getAttribute('aria-expanded'),'true');
+    await v.host(()=>H.mount());await v.frame.locator('#notice').filter({hasText:T.en.updated}).waitFor();await settle(v);
+    assert.equal(await v.frame.locator('#title-studio .badge-shape').last().textContent(),T.en.unconfirmed,'supplied reload state, no local hint revival');
+    assert.equal((await mutations(v)).length,1);
+    await v.host(()=>H.update({locale:'fr'}));await capture(v,'installation-non-confirmee-fr-test-preview');
+    await refresh(v,installationFixture('pending'));await capture(v,'installation-en-cours-fr-test-preview');
   });
 
   await isolated('foreign-only binding projection is none with offers; unknown attachment disables attach; no author detach',async v=>{
@@ -240,10 +314,10 @@ try {
     for(const [id,key,method,input] of cases){
       const before=(await mutations(v)).length;await action(v.frame,id,key).first().click();await notice(v,'confirming');
       assert.equal((await mutations(v)).length,before+1);assert.deepEqual((await mutations(v)).at(-1).input,input);assert.equal((await mutations(v)).at(-1).method,method);
-      assert.equal(await v.frame.locator('#summary').textContent(),'3 integrations · 0 confirmed active');
+      assert.equal(await v.frame.locator('#summary').textContent(),'3 integrations');
       assert.doesNotMatch(await v.frame.locator('#notice').textContent(),/installed|attached|activated/i);
       await v.host(()=>H.finish('confirmed'));await notice(v,'confirmed');await settle(v);
-      assert.equal((await mutations(v)).length,before+1);assert.equal(await v.frame.locator('#summary').textContent(),'3 integrations · 0 confirmed active');
+      assert.equal((await mutations(v)).length,before+1);assert.equal(await v.frame.locator('#summary').textContent(),'3 integrations');
     }
     const check=v.frame.locator('#body-studio input').first();await check.click();await notice(v,'confirming');
     const call=(await mutations(v)).at(-1);assert.equal(call.method,'setActive');assert.deepEqual(call.input,{integration:'studio',scope:'global',enabled:true});
@@ -255,7 +329,7 @@ try {
     assert((await mutations(v)).filter(call=>call.input.integration==='studio'&&call.input.scope).every(call=>call.input.scope==='global'));
     assert.equal(await v.host(()=>H.errors.length),0);
     const enabled=fixture();enabled.state.integrations[0].activation={global:'enabled',project:'default',effective:'enabled'};
-    await refresh(v,enabled);assert.equal(await v.frame.locator('#summary').textContent(),'3 integrations · 1 confirmed active','only authoritative read changes the summary');
+    await refresh(v,enabled);assert.match(await v.frame.locator(body('studio')).textContent(),/Effective activationEnabled/,'only authoritative read changes activation');
   });
 
   for(const outcome of ['cancelled','confirmed','expired','failed'])await isolated(`exact same iframe button focus after simulated ${outcome}`,async v=>{
@@ -402,8 +476,16 @@ try {
       assert.equal(await v.frame.locator('html').getAttribute('dir'),base==='he'?'rtl':'ltr');
       assert.equal(await v.frame.locator('#refresh').getAttribute('aria-label'),T[base].refresh);
       assert.equal(await v.frame.locator('body').evaluate(node=>node.scrollWidth<=node.clientWidth),true,locale+' no overflow');
+      for(const kind of installationStates){
+        await refresh(v,installationFixture(kind));
+        const key={pending:'pending',unconfirmed:'unconfirmed',unloaded:'inactive',absent:'absent','active-no-version':'outdated','undeclared-active':'outdated','failed-no-id':'failed',disabled:'disabled',ambiguous:'unknown','older-host':'unknown'}[kind];
+        assert.equal(await v.frame.locator('#title-studio .badge-shape').last().textContent(),T[base][key],locale+'/'+kind);
+        assert.equal(await v.frame.locator('body').evaluate(node=>node.scrollWidth<=node.clientWidth),true,locale+'/'+kind+' no overflow');
+      }
+      await refresh(v,installationFixture('unconfirmed'));
       if(base==='he')await capture(v,'narrow-hebrew-rtl');
     }
+    await refresh(v,fixture());
     for(const appearance of ['dark','light']){
       await v.host(({appearance,colors})=>H.update({appearance,colors,locale:'en'}),{appearance,colors:palettes[appearance]});
       const styles=await v.frame.locator('body').evaluate(node=>({bg:getComputedStyle(node).backgroundColor,radii:[...document.querySelectorAll('*')].filter(node=>{const s=getComputedStyle(node);return ['borderTopLeftRadius','borderTopRightRadius','borderBottomLeftRadius','borderBottomRightRadius'].some(key=>s[key]!=='0px');}).map(node=>({class:node.className,tag:node.tagName}))}));
@@ -428,8 +510,8 @@ try {
       for(const id of ['studio','vendor','service'])await expand(v,id);
       await v.host(({appearance,colors})=>H.update({appearance,colors}),{appearance,colors:palettes[appearance]});
       await v.frame.locator('body').evaluate((_,source)=>(0,eval)(source),axeSource);
-      for(const scenario of ['normal','attached','host-unknown','host-absent','host-incompatible','unknown-failed','non-conforming','stale','unavailable']){
-        const f=fixture();
+      for(const scenario of ['normal','attached','host-unknown','host-absent','host-incompatible','unknown-failed','non-conforming','stale','unavailable',...installationStates]){
+        const f=installationStates.includes(scenario)?installationFixture(scenario):fixture();
         if(scenario==='attached')f.state.integrations[0].attachment={state:'attached',label:'This fixture scene'};
         if(scenario.startsWith('host-'))f.state.integrations[0].status.host={state:scenario.slice(5),...(scenario==='host-absent'?{action:'install'}:{})};
         if(scenario==='unknown-failed'){f.state.integrations[0].attachment={state:'unknown'};f.state.integrations[1].state='failed';}

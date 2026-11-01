@@ -1,10 +1,12 @@
 # Bundles test fixture
 
 Run `node scripts/test-bundles.mjs <CodeNomad checkout>` from the extensions checkout.
-The argument selects the CodeNomad checkout, whose HEAD must be exactly
-`61382f7ec7ddcf68e190e8023644362457c227ea`. The index and working-file Git blobs
-of all six consumed runtime source files must match that commit. Python,
-Playwright, tsx and the pinned checkout's existing dependencies are required.
+The argument selects a CodeNomad Git object database containing
+`bea9af583b88481f35b3470930d48458fecfdded`. The harness exports all six consumed
+runtime source files with `git show` and verifies their blob hashes, borrowing
+only the checkout's installed test dependencies through a temporary link.
+Its mutable HEAD, index and worktree are unused. Python, Playwright, tsx and
+the checkout's existing dependencies are required.
 
 The test packages the actual panel twice, checks identical ZIP bytes, validates
 the ZIP with the real archive reader, and passes **pkg.html** to the real frame
@@ -18,9 +20,20 @@ attachment require separate integration qualification. Fixture attachment
 `none` plus nonzero offers represents the foreign-only-binding projection;
 foreign bindings, session data and authority never enter the iframe.
 
+`data.mjs` supplies schema-valid declaration/loading/activation/progress
+combinations, including no plugin facts on an older host. The iframe owns no
+installation tracker. Virtual-clock checks at 119,999, 120,000 and 120,001 ms
+assert that a supplied pending hint remains unchanged until a parent state
+event supplies unconfirmed. Late receipts, reverse read completion, reload,
+runtime loss, disabled/ambiguous entries and all ten locales/RTL are covered.
+This is display qualification; the real parent tracker and native lifecycle
+require separate checks.
+
 Set `CODENOMAD_PANEL_CAPTURE_DIR` to save screenshots of this actual fixture and
 `bundles-evidence.json` (pin/blob hashes, package digest, failures, audit details
-and gaps). The default run reports the missing screenshot/audit evidence.
+and gaps). Captures include a visible test-preview/synthetic-data banner,
+including French pending/unconfirmed examples. The default run reports the
+missing screenshot/audit evidence.
 
 For axe, download the test-only tarball specified in `axe.json` to the approved
 temporary directory (`npm pack axe-core@4.11.0 --pack-destination <temp>`), verify

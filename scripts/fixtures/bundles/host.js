@@ -5,6 +5,9 @@ const H=window.H={...fixture,context:{apiVersion:4,sessionId:'ses_fixture',local
   calls:[],errors:[],pending:[],inFlight:0,maxInFlight:0,mounts:0,topMessages:0,sequence:0,
   mode:'confirming',hold:[],held:[],readError:false,hostsError:false,answered:[],closed:0};
 let port,frame;
+const banner=document.createElement('p');banner.style.cssText='margin:0;padding:5px;background:#fff;color:#111;font:12px system-ui';
+document.body.style.cssText='display:grid;grid-template-rows:auto minmax(0,1fr)';document.body.append(banner);
+const label=()=>{banner.textContent=H.context.locale.startsWith('fr')?'APERÇU DE TEST · données synthétiques · hôte MessagePort simulé':'TEST PREVIEW · synthetic data · simulated MessagePort host';};label();
 window.addEventListener('message',event=>{if(event.source===frame?.contentWindow)H.topMessages++;});
 H.count=method=>H.calls.filter(call=>call.method===method).length;
 H.mount=()=>{
@@ -18,7 +21,7 @@ H.mount=()=>{
     frame.contentWindow.postMessage({type:'codenomad:init'},'*',[channel.port2]);};
   frame.srcdoc=doc;document.body.append(frame);
 };
-H.update=value=>{H.context={...H.context,...value};port.postMessage({type:'context',context:H.context});};
+H.update=value=>{H.context={...H.context,...value};label();port.postMessage({type:'context',context:H.context});};
 H.changed=detail=>port.postMessage({type:'bundles:changed',...detail});
 H.focus=requestID=>port.postMessage({type:'bundles:focus',requestID});
 H.finish=(outcome,{focus=true,requestID=H.pending.at(-1)}={})=>{
