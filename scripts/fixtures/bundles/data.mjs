@@ -3,7 +3,7 @@
 export const stamp = {state:'fresh',fetchedAt:'2026-11-01T09:00:00.000Z'};
 const entry = (id,family) => ({id,displayName:`OpenCode for ${id[0].toUpperCase()+id.slice(1)}`,family,
   summary:{en:`Deterministic ${family} integration fixture.`},app:{name:id,versions:'>=1.0.0'},
-  docs:`https://github.com/NeuralNomadsAI/opencode-integrations/docs/${id}`,catalogStatus:'preview'});
+  docs:`https://github.com/NeuralNomadsAI/opencode-integrations/tree/main/integrations/${id}`,catalogStatus:'preview'});
 export const catalog = {...stamp,integrations:[entry('studio','native'),entry('vendor','vendor-mcp'),entry('service','api')]};
 const activation = {global:'default',project:'default',effective:'default'};
 export const state = {catalog:stamp,integrations:[

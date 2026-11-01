@@ -1,9 +1,9 @@
 // SIMULATED HOST ONLY: real frame-document bridge + MessagePort, not ExtensionPanel,
 // backend mutations, trusted confirmation controls or application integration RPC.
-const doc=await (await fetch('/doc')).text(), fixture=await (await fetch('/fixture')).json();
+const doc=await (await fetch(location.search.includes('legacy')?'/old-doc':'/doc')).text(), fixture=await (await fetch('/fixture')).json();
 const H=window.H={...fixture,context:{apiVersion:4,sessionId:'ses_fixture',locale:'en',appearance:'dark',colors:fixture.palettes.dark},
   calls:[],errors:[],pending:[],inFlight:0,maxInFlight:0,mounts:0,topMessages:0,sequence:0,
-  mode:'confirming',hold:[],held:[],readError:false,hostsError:false,answered:[],closed:0};
+  mode:'confirming',docsMode:'auto',openIntents:[],hold:[],held:[],readError:false,hostsError:false,answered:[],closed:0};
 let port,frame;
 const banner=document.createElement('p');banner.style.cssText='margin:0;padding:5px;background:#fff;color:#111;font:12px system-ui';
 document.body.style.cssText='display:grid;grid-template-rows:auto minmax(0,1fr)';document.body.append(banner);
@@ -43,6 +43,14 @@ async function handle(own,data){
     if(['catalog','state','hosts'].includes(method)){
       if(H.readError||(method==='hosts'&&H.hostsError))throw Error('fixture read failure');
       response={result:structuredClone(H[method])};
+    } else if(method==='openDocs'){
+      if(H.docsMode==='error')throw Error('fixture documentation transport failure');
+      if(H.docsMode==='busy-error')response={error:'busy'};
+      else {
+        const result=H.docsMode==='auto'?await window.resolveDocs(input,H.catalog):H.docsMode;
+        if(result?.outcome==='requested')H.openIntents.push(input.integration);
+        response={result};
+      }
     } else if(H.mode==='error')throw Error('fixture mutation failure');
     else if(H.mode==='busy-error')response={error:'busy'};
     else if(H.mode==='confirming'){

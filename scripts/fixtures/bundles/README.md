@@ -2,7 +2,7 @@
 
 Run `node scripts/test-bundles.mjs <CodeNomad checkout>` from the extensions checkout.
 The argument selects a CodeNomad Git object database containing
-`bea9af583b88481f35b3470930d48458fecfdded`. The harness exports all six consumed
+`abb5789658dfb66a1c24af7fff498ab21b9425f3`. The harness exports all seven consumed
 runtime source files with `git show` and verifies their blob hashes, borrowing
 only the checkout's installed test dependencies through a temporary link.
 Its mutable HEAD, index and worktree are unused. Python, Playwright, tsx and
@@ -13,7 +13,7 @@ the ZIP with the real archive reader, and passes **pkg.html** to the real frame
 document function. A headless browser mounts that document in an opaque-origin
 `sandbox="allow-scripts"` iframe and exchanges real MessagePort messages.
 
-`host.js` is an explicitly simulated host. Tests supply outcome events and focus
+`host.js` is an explicitly **MOCK MessagePort host**. Tests supply outcome events and focus
 messages; they exercise author and bridge behavior. Native confirmation UI,
 ExtensionPanel, backend mutation, native RPC authority and actual application
 attachment require separate integration qualification. Fixture attachment
@@ -28,6 +28,20 @@ event supplies unconfirmed. Late receipts, reverse read completion, reload,
 runtime loss, disabled/ambiguous entries and all ten locales/RTL are covered.
 This is display qualification; the real parent tracker and native lifecycle
 require separate checks.
+
+`catalog.json` is the catalogue at integrations commit
+`54d6e5d0f4c22e74d228822fcaaa0912818a8b46`, verified as Git blob
+`752451bff8d9e3779b8dbf3087cca2ab16492804` after Git-style CRLF-to-LF
+normalization, so Windows checkout line endings preserve verification. Only its public display fields
+enter the iframe. Documentation checks use its actual Blender README, same-ID
+tree destinations and malicious catalogue URLs. The mock backend policy applies
+the immutable strict input/result schemas and URL validator; its `requested`
+records an intent, without launching a browser. Tests assert ID-only requests,
+bounded outcomes, transport/timeouts, four-call admission, duplicate suppression,
+context fences, no navigation/retry and translated narrow/RTL feedback.
+The older bridge is independently exported from immutable CodeNomad
+`bea9af583b88481f35b3470930d48458fecfdded` and checks absent-method fallback.
+The actual parent, authenticated backend and desktop opener remain separate gates.
 
 Set `CODENOMAD_PANEL_CAPTURE_DIR` to save screenshots of this actual fixture and
 `bundles-evidence.json` (pin/blob hashes, package digest, failures, audit details

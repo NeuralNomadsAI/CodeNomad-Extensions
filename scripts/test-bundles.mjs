@@ -14,7 +14,7 @@ import os from 'node:os';
 import {fileURLToPath,pathToFileURL} from 'node:url';
 import {fixture,palettes,installationFixture,installationStates} from './fixtures/bundles/data.mjs';
 
-const PIN='bea9af583b88481f35b3470930d48458fecfdded';
+const PIN='abb5789658dfb66a1c24af7fff498ab21b9425f3';
 assert(process.argv[2],'Usage: node scripts/test-bundles.mjs <pinned CodeNomad checkout>');
 const checkout=path.resolve(process.argv[2]);
 const root=fileURLToPath(new URL('..',import.meta.url));
@@ -27,6 +27,7 @@ const consumed=[
   'packages/server/src/panel-extensions/bundles-contract.ts',
   'packages/server/src/opencode/integrations/contract.ts',
   'packages/server/src/opencode/integrations/status.ts',
+  'packages/server/src/panel-extensions/bundles-docs.ts',
 ];
 const sourceHashes={};
 const require=createRequire(path.join(checkout,'package.json'));
@@ -55,6 +56,28 @@ try {
   const {panelExtensionDocument,PANEL_EXTENSION_SANDBOX}=await load(consumed[0]);
   const {readPanelExtensionArchive}=await load(consumed[1]);
   const schemas=await load(consumed[3]);
+  const {isIntegrationDocsUrl}=await load(consumed[6]);
+  const oldPin='bea9af583b88481f35b3470930d48458fecfdded',oldPath='packages/ui/src/components/panel-extensions/frame-document.ts';
+  const oldBytes=execFileSync('git',['show',`${oldPin}:${oldPath}`],{cwd:checkout,windowsHide:true});
+  sourceHashes[`${oldPin}:${oldPath}`]=createHash('sha1').update(`blob ${oldBytes.length}\0`).update(oldBytes).digest('hex');
+  assert.equal(sourceHashes[`${oldPin}:${oldPath}`],git('rev-parse',`${oldPin}:${oldPath}`));
+  await writeFile(path.join(exported,'legacy-frame.ts'),oldBytes);
+  const {panelExtensionDocument:oldDocument}=await load('legacy-frame.ts');
+  const catalogueBytes=Buffer.from((await readFile(new URL('./fixtures/bundles/catalog.json',import.meta.url),'utf8')).replace(/\r\n/g,'\n'));
+  const catalogBlob=createHash('sha1').update(`blob ${catalogueBytes.length}\0`).update(catalogueBytes).digest('hex');
+  assert.equal(catalogBlob,'752451bff8d9e3779b8dbf3087cca2ab16492804','verbatim OI 54d6e5d catalogue blob');
+  const actualCatalog=JSON.parse(catalogueBytes);
+  const actualEntry=actualCatalog.integrations[0];
+  const realFixture=()=>{const f=fixture();f.catalog.integrations=actualCatalog.integrations.map(({id,displayName,family,summary,app,docs,status})=>({id,displayName,family,summary,app,docs,catalogStatus:status}));
+    f.state.integrations=[{...f.state.integrations[0],id:actualEntry.id}];return f;};
+  // MOCK backend policy, using the pinned strict schemas and canonical URL policy.
+  // This is not the actual HTTP route, external opener or desktop host.
+  const resolveDocs=(input,catalog)=>{
+    if(!schemas.bundlesHostsInputSchema.safeParse(input).success)return {outcome:'invalid'};
+    const entry=catalog.integrations.find(entry=>entry.id===input.integration);
+    const result={outcome:!entry?'invalid':catalog.state==='unavailable'||!isIntegrationDocsUrl(entry.docs,input.integration)?'unavailable':'requested'};
+    return schemas.bundlesDocsResultSchema.parse(result);
+  };
   const source=path.join(root,'extensions/bundles');
   const html=(await readFile(path.join(source,'panel.html'),'utf8')).replace(/\r\n/g,'\n');
   const manifest=JSON.parse(await readFile(path.join(source,'manifest.json'),'utf8'));
@@ -74,8 +97,8 @@ try {
     assert.match(pkg.html,/MIT License — Copyright \(c\) 2026 NeuralNomadsAI/);
   });
   assert(pkg,'cannot run author bytes without successful archive validation');
-  await test('10 actual locale dictionaries, exactly 95 keys, nonempty strings and placeholder parity',async()=>{
-    assert.deepEqual(Object.keys(T).sort(),[...LOCALES].sort());assert.equal(Object.keys(T.en).length,95);
+  await test('10 actual locale dictionaries, exactly 100 keys, nonempty strings and placeholder parity',async()=>{
+    assert.deepEqual(Object.keys(T).sort(),[...LOCALES].sort());assert.equal(Object.keys(T.en).length,100);
     const marks=value=>[...value.matchAll(/\{\w+\}/g)].map(match=>match[0]).sort();
     for(const locale of LOCALES){assert.deepEqual(Object.keys(T[locale]).sort(),Object.keys(T.en).sort(),locale);
       for(const [key,value] of Object.entries(T.en)){assert.equal(typeof T[locale][key],'string');assert(T[locale][key].trim(),`${locale}.${key}`);assert.deepEqual(marks(T[locale][key]),marks(value),`${locale}.${key}`);}}
@@ -89,7 +112,7 @@ try {
   const validateWire=({capability,method,input})=>{
     assert.equal(capability,'bundles');
     if(method==='catalog'||method==='state')schemas.bundlesEmptyInputSchema.parse(input);
-    else if(method==='hosts')schemas.bundlesHostsInputSchema.parse(input);
+    else if(method==='hosts'||method==='openDocs')schemas.bundlesHostsInputSchema.parse(input);
     else {
       assert(methods.includes(method),`unexpected mutation ${method}; author detach is absent`);
       // Test-only envelope, never sent to the iframe. Native owner/mount authority
@@ -114,28 +137,34 @@ try {
     assert.equal(schemas.bundlesStateResultSchema.safeParse(privateState.state).success,false,'host-private correlation stays outside author projection');
   });
   const doc=panelExtensionDocument(pkg.html,'bundles-fixture',pkg.manifest.apiVersion,pkg.manifest.permissions);
+  const oldDoc=oldDocument(pkg.html,'bundles-fixture',pkg.manifest.apiVersion,pkg.manifest.permissions);
   assert.equal(PANEL_EXTENSION_SANDBOX,'allow-scripts');
   const hostScript=await readFile(new URL('./fixtures/bundles/host.js',import.meta.url),'utf8');
   server=createServer((request,response)=>{
-    const routes={'/doc':[doc,'text/html; charset=utf-8'],'/fixture':[JSON.stringify({...fixture(),palettes}),'application/json'],'/host.js':[hostScript,'text/javascript']};
+    const routes={'/doc':[doc,'text/html; charset=utf-8'],'/old-doc':[oldDoc,'text/html; charset=utf-8'],'/fixture':[JSON.stringify({...fixture(),palettes}),'application/json'],'/host.js':[hostScript,'text/javascript']};
     const [body,type]=routes[request.url]||['<!doctype html><html lang="en"><title>Simulated bundles host</title><style>html,body{margin:0;height:100%;overflow:hidden}</style><body><script type="module" src="/host.js"></script>','text/html; charset=utf-8'];
     response.setHeader('Content-Type',type);response.end(body);
   });
   await new Promise(resolve=>server.listen(0,'127.0.0.1',resolve));
   browser=await chromium.launch({headless:true,executablePath:process.env.CODENOMAD_BROWSER_PATH||undefined});
   const url=`http://127.0.0.1:${server.address().port}/`;
-  async function open(width=420,height=1000){
+  async function open(width=420,height=1000,legacy=false){
     const page=await browser.newPage({viewport:{width,height}});page.setDefaultTimeout(5000);
     page.on('pageerror',error=>errors.push(String(error)));page.on('console',message=>{if(message.type()==='error')errors.push(message.text());});
     await page.exposeFunction('validateWire',input=>{try{return validateWire(input);}catch(error){errors.push('wire schema: '+String(error));throw error;}});
+    await page.exposeFunction('resolveDocs',resolveDocs);
     await page.clock.install({time:new Date('2026-11-01T09:00:00.000Z')});
-    await page.goto(url);
+    await page.goto(url+(legacy?'?legacy':''));
     const frame=page.frameLocator('iframe'),host=(fn,arg)=>page.evaluate(fn,arg);
     await frame.locator('#notice').filter({hasText:T.en.updated}).waitFor();
     return {page,frame,host};
   }
   const body=id=>`#body-${id}`,row=id=>`.integration:has(#title-${id})`;
   const action=(frame,id,key)=>frame.locator(`${body(id)} [data-action=${key}]`).filter({visible:true});
+  const docs=(v,id='studio')=>v.frame.locator(`${row(id)} [data-action=docs]`);
+  const docsFeedback=(v,id='studio')=>v.frame.locator(`${row(id)} .docs-status`);
+  const docsCalls=v=>v.host(()=>H.calls.filter(call=>call.method==='openDocs'));
+  const clickDocs=async(v,id='studio')=>{await v.page.clock.fastForward(1001);await docs(v,id).click();await settle(v);};
   const settle=async view=>{
     await view.page.waitForFunction(()=>H.inFlight===0);
     await view.frame.locator('body').evaluate(()=>new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve))));
@@ -150,7 +179,7 @@ try {
   const expand=async(view,id)=>{const button=view.frame.locator('#title-'+id);if(await button.getAttribute('aria-expanded')!=='true')await button.click();await settle(view);};
   const isFocused=locator=>locator.evaluate(node=>node===document.activeElement);
   const field=(view,key)=>view.frame.locator('#body-studio dt').filter({hasText:new RegExp('^'+T.en[key]+'$')}).evaluate(node=>node.nextElementSibling.textContent);
-  const mutations=view=>view.host(()=>H.calls.filter(call=>!['catalog','state','hosts'].includes(call.method)));
+  const mutations=view=>view.host(()=>H.calls.filter(call=>!['catalog','state','hosts','openDocs'].includes(call.method)));
   async function capture(view,name){
     if(!process.env.CODENOMAD_PANEL_CAPTURE_DIR)return;
     await mkdir(process.env.CODENOMAD_PANEL_CAPTURE_DIR,{recursive:true});
@@ -168,7 +197,7 @@ try {
     assert.equal(await v.page.locator('iframe').getAttribute('sandbox'),'allow-scripts');
     assert.equal(await v.frame.locator('.integration').count(),3);
     assert.equal(await v.frame.locator('#summary').textContent(),'3 integrations');
-    assert.deepEqual(await v.frame.locator('body').evaluate(()=>Object.keys(codenomad.bundles).sort()),['attach','catalog','detach','hosts','installHost','onChanged','request','setActive','state']);
+    assert.deepEqual(await v.frame.locator('body').evaluate(()=>Object.keys(codenomad.bundles).sort()),['attach','catalog','detach','hosts','installHost','onChanged','openDocs','request','setActive','state']);
     assert.deepEqual(await v.frame.locator('body').evaluate(()=>Object.keys(codenomad).sort()),['apiVersion','bundles','getContext','onContext']);
     const native=v.frame.locator(row('studio'));assert.match(await native.textContent(),/Version unknown/);
     assert.equal(await native.locator('.disclosure .badge-shape').last().textContent(),T.en.outdated);
@@ -180,6 +209,122 @@ try {
     assert.match(await native.textContent(),/https:\/\/github.com\/NeuralNomadsAI\/opencode-integrations\//);
     assert.equal(await v.host(()=>H.topMessages),0,'requests use MessagePort, not window messages');
     await capture(v,'three-families-dark');
+  });
+
+  await test('MOCK backend policy: actual catalogue README, same-ID tree, strict input/result and raw canonical URL rejection',async()=>{
+    validateFixture(realFixture());assert.equal(resolveDocs({integration:'blender'},realFixture().catalog).outcome,'requested');
+    const f=realFixture();f.catalog.state='stale';assert.equal(resolveDocs({integration:'blender'},f.catalog).outcome,'requested');
+    const valid=actualEntry.docs,base='https://github.com/NeuralNomadsAI/opencode-integrations/';
+    for(const url of [base+'tree/main/integrations/blender',valid])assert.equal(isIntegrationDocsUrl(url,'blender'),true);
+    for(const url of [valid+'?redirect=https://evil.invalid',valid+'#fragment',valid.replace('/blender/','/studio/'),
+      valid.replace('github.com','github.com.evil.invalid'),valid.replace('https://','https://user@'),valid.replace('github.com/','github.com:443/'),
+      valid.replace('/plugin/','/%70lugin/'),base+'tree/main/integrations/blender/../studio',base+'tree/main/integrations/blender/',
+      base+'blob/main/integrations/blender',base+'tree/main/integrations/blender/plugin/README.md','javascript:alert(1)']){
+      assert.equal(isIntegrationDocsUrl(url,'blender'),false,url);
+      const f=realFixture();f.catalog.integrations[0].docs=url;
+      assert.equal(resolveDocs({integration:'blender'},f.catalog).outcome,'unavailable');
+    }
+    for(const key of ['url','sessionID','rpc','path','scope','owner','mountID']){
+      const input={integration:'blender',[key]:'forbidden'};
+      assert.equal(resolveDocs(input,realFixture().catalog).outcome,'invalid');
+      assert.equal(schemas.bundlesDocsInputSchema.safeParse({owner:'a'.repeat(32),mountID:'b'.repeat(32),integration:'blender',extra:'no'}).success,false);
+    }
+    assert.equal(resolveDocs({integration:'missing'},realFixture().catalog).outcome,'invalid');
+    assert.equal(schemas.bundlesDocsResultSchema.safeParse({outcome:'requested',url:valid}).success,false);
+  });
+
+  await isolated('Documentation: actual catalogue README, collapsed keyboard action, ID-only request, no navigation or extra link',async v=>{
+    await refresh(v,realFixture());const button=docs(v,'blender'),disclosure=v.frame.locator('#title-blender');
+    await disclosure.click();assert.equal(await disclosure.getAttribute('aria-expanded'),'false');
+    await button.focus();await button.evaluate(node=>window.docsTrigger=node);
+    const beforeURL=v.page.url(),frameURL=v.page.frames()[1].url(),requests=[],popups=[];
+    v.page.on('request',request=>requests.push(request.url()));v.page.on('popup',page=>popups.push(page));
+    await v.page.keyboard.press('Enter');await settle(v);
+    assert.equal(await docsFeedback(v,'blender').textContent(),T.en.docsRequested);assert.equal(await docsFeedback(v,'blender').isVisible(),true);
+    assert.equal(await disclosure.getAttribute('aria-expanded'),'false');
+    assert.equal(await button.evaluate(node=>node===window.docsTrigger&&node===document.activeElement),true);
+    assert.deepEqual((await docsCalls(v)).map(({capability,method,input})=>({capability,method,input})),[{capability:'bundles',method:'openDocs',input:{integration:'blender'}}]);
+    assert.equal(await v.host(()=>H.openIntents.length),1,'MOCK handoff intent only, not actual browser proof');
+    assert.equal(v.page.url(),beforeURL);assert.equal(v.page.frames()[1].url(),frameURL);assert.deepEqual(requests,[]);assert.deepEqual(popups,[]);
+    assert.equal(await v.frame.locator('a,form,dialog').count(),0);
+    await disclosure.click();await settle(v);assert.equal(await v.frame.locator('.docs-address').textContent(),actualEntry.docs);
+    assert.equal(await v.frame.locator('.docs-address').evaluate(node=>{const range=document.createRange();range.selectNodeContents(node);getSelection().removeAllRanges();getSelection().addRange(range);return getSelection().toString();}),actualEntry.docs);
+    await v.host(()=>H.update({locale:'fr'}));await capture(v,'documentation-demandee-fr-test-preview');
+    for(let i=0;i<5;i++)await v.host(()=>H.changed({kind:'state'}));await settle(v);
+    await v.frame.locator('#refresh').click();await settle(v);await v.page.clock.fastForward(120_000);await settle(v);
+    assert.equal((await docsCalls(v)).length,1,'events, Refresh, locale and idle time never reopen');assert.equal((await mutations(v)).length,0);
+  });
+
+  await isolated('Documentation: malicious catalogue text never navigates; stale works, unavailable is honest, all families ID-only',async v=>{
+    const requests=[],popups=[],initial=v.page.url(),frameURL=v.page.frames()[1].url();v.page.on('request',request=>requests.push(request.url()));v.page.on('popup',page=>popups.push(page));
+    for(const id of ['studio','vendor','service']){await clickDocs(v,id);assert.deepEqual((await docsCalls(v)).at(-1).input,{integration:id});}
+    const urls=[actualEntry.docs+'?redirect=https://evil.invalid',actualEntry.docs+'#secret',actualEntry.docs.replace('/blender/','/studio/'),actualEntry.docs.replace('/plugin/','/%70lugin/')];
+    for(const address of urls){const f=realFixture();f.catalog.integrations[0].docs=address;await refresh(v,f);await clickDocs(v,'blender');
+      assert.equal(await docsFeedback(v,'blender').textContent(),T.en.docsUnavailable);assert.equal(await v.frame.locator('.docs-address').textContent(),address);}
+    const stale=realFixture();stale.catalog.state=stale.state.catalog.state='stale';await refresh(v,stale);await clickDocs(v,'blender');assert.equal(await docsFeedback(v,'blender').textContent(),T.en.docsRequested);
+    const unavailable=realFixture();unavailable.catalog.state=unavailable.state.catalog.state='unavailable';await refresh(v,unavailable);await clickDocs(v,'blender');assert.equal(await docsFeedback(v,'blender').textContent(),T.en.docsUnavailable);
+    assert.equal(v.page.url(),initial);assert.equal(v.page.frames()[1].url(),frameURL);assert.deepEqual(requests,[]);assert.deepEqual(popups,[]);
+    assert.equal(await v.frame.locator('a,form,dialog').count(),0);assert.equal((await mutations(v)).length,0);
+  });
+
+  await isolated('Documentation: fixed outcomes, transport failure, malformed responses, local duplicate fence and no management notice overwrite',async v=>{
+    for(const [mode,key] of [[{outcome:'requested'},'docsRequested'],[{outcome:'unavailable'},'docsUnavailable'],[{outcome:'busy'},'docsBusy'],[{outcome:'invalid'},'docsInvalid'],['error','docsUnavailable'],['busy-error','docsBusy'],
+      [null,'docsUnavailable'],[{},'docsUnavailable'],[{outcome:'constructor'},'docsUnavailable'],[{outcome:'confirming',requestID:'a'.repeat(32)},'docsUnavailable'],[{outcome:'requested',url:'private'},'docsUnavailable']]){
+      await v.host(mode=>{H.docsMode=mode;},mode);const count=(await docsCalls(v)).length;
+      await clickDocs(v);assert.equal(await docsFeedback(v).textContent(),T.en[key]);
+      await v.page.clock.fastForward(60_000);await settle(v);assert.equal((await docsCalls(v)).length,count+1);assert.equal(await docs(v).getAttribute('aria-disabled'),'false');
+      assert.doesNotMatch(await docsFeedback(v).textContent(),/private|constructor|confirming/);
+    }
+    await v.host(()=>{H.docsMode='auto';H.hold=['openDocs'];});await v.page.clock.fastForward(1001);await docs(v).click();await v.page.waitForFunction(()=>H.held.length===1);
+    await docs(v).focus();await v.page.keyboard.press('Enter');await docs(v,'vendor').focus();await v.page.keyboard.press('Space');assert.equal(await v.host(()=>H.held.length),1,'one pending open across rows');
+    await v.host(()=>H.release());await settle(v);const count=(await docsCalls(v)).length;
+    await docs(v).click();await settle(v);assert.equal((await docsCalls(v)).length,count,'one-second local explicit-action throttle');
+    await action(v.frame,'studio','installHost').click();await notice(v,'confirming');
+    await clickDocs(v);assert.equal(await v.frame.locator('#notice').textContent(),T.en.confirming);assert.equal(await action(v.frame,'studio','installHost').getAttribute('aria-disabled'),'true');
+    await v.host(()=>H.finish('cancelled'));await notice(v,'cancelled');
+    assert.equal((await mutations(v)).length,1);
+  });
+
+  await isolated('Documentation: late conversation reply fenced; four-call admission and real bridge timeout safely settle without retry',async v=>{
+    await v.host(()=>{H.hold=['openDocs'];});await docs(v).click();await v.page.waitForFunction(()=>H.held.length===1);
+    await v.host(()=>H.update({sessionId:'ses_new_docs'}));await v.frame.locator('#title-studio').waitFor();
+    await v.page.clock.fastForward(1001);await docs(v).click();await v.page.waitForFunction(()=>H.held.length===2);
+    await v.host(()=>H.held.shift()());await v.host(()=>H.barrier());
+    assert.equal(await docs(v).getAttribute('aria-disabled'),'true','old completion cannot unlock the newer pending action');
+    assert.equal(await docsFeedback(v).isVisible(),false,'old outcome cannot mark new row');
+    await v.host(()=>H.release());await settle(v);assert.equal(await docsFeedback(v).textContent(),T.en.docsRequested);
+    await v.host(()=>{H.hold=['catalog'];});await v.frame.locator('body').evaluate(()=>{window.docsBatch=Promise.allSettled(Array.from({length:4},()=>codenomad.bundles.catalog()));});
+    await v.page.waitForFunction(()=>H.held.length===4);const before=(await docsCalls(v)).length;
+    await v.page.clock.fastForward(1001);await docs(v).click();await docsFeedback(v).filter({hasText:T.en.docsBusy}).waitFor();
+    assert.equal((await docsCalls(v)).length,before,'real bridge refuses fifth without a host request');await v.host(()=>H.release());await settle(v);
+    await v.host(()=>{H.hold=['openDocs'];});await v.page.clock.fastForward(1001);await docs(v).click();await v.page.waitForFunction(()=>H.held.length===1);
+    await v.page.clock.fastForward(20_001);await docsFeedback(v).filter({hasText:T.en.docsUnavailable}).waitFor();
+    const count=(await docsCalls(v)).length;await v.host(()=>H.release());await settle(v);assert.equal(await docsFeedback(v).textContent(),T.en.docsUnavailable,'late timed-out reply ignored');
+    await v.page.clock.fastForward(60_000);await settle(v);assert.equal((await docsCalls(v)).length,count);
+  });
+
+  await isolated('Documentation: completion preserves moved focus; row removal and remount discard pending feedback without replay',async v=>{
+    await v.host(()=>{H.hold=['openDocs'];});await docs(v).click();await v.page.waitForFunction(()=>H.held.length===1);
+    await v.page.locator('body').evaluate(node=>{node.tabIndex=-1;node.focus();});
+    await v.host(()=>H.release());await settle(v);
+    assert.equal(await v.page.locator('body').evaluate(node=>node===document.activeElement),true,'completion never retakes host focus');
+    await v.host(()=>{H.hold=['openDocs'];});await v.page.clock.fastForward(1001);await docs(v).click();await v.page.waitForFunction(()=>H.held.length===1);
+    const f=fixture();f.catalog.integrations=f.catalog.integrations.filter(entry=>entry.id!=='studio');f.state.integrations=f.state.integrations.filter(entry=>entry.id!=='studio');validateFixture(f);
+    await v.host(f=>{Object.assign(H,f);H.changed({kind:'state'});},f);await v.frame.locator('#title-studio').waitFor({state:'detached'});
+    await v.host(()=>H.release());await settle(v);assert.equal(await v.frame.locator('.docs-status').filter({hasText:T.en.docsRequested}).count(),0);
+    await refresh(v,fixture());await v.host(()=>{H.hold=['openDocs'];});await v.page.clock.fastForward(1001);await docs(v).click();await v.page.waitForFunction(()=>H.held.length===1);
+    const count=(await docsCalls(v)).length;await v.host(()=>H.mount());await v.frame.locator('#notice').filter({hasText:T.en.updated}).waitFor();
+    await v.host(()=>H.release());await settle(v);assert.equal(await docsFeedback(v).isVisible(),false);assert.equal((await docsCalls(v)).length,count,'remount never replays pending intent');
+  });
+
+  await test('Documentation: real immutable older bridge without openDocs retains text and management, no fabricated success',async()=>{
+    const v=await open(420,1000,true);try{
+      assert.equal(await v.frame.locator('body').evaluate(()=>typeof codenomad.bundles.openDocs),'undefined');
+      await docs(v).click();assert.equal(await docsFeedback(v).textContent(),T.en.docsUnavailable);assert.equal((await docsCalls(v)).length,0);
+      assert.match(await v.frame.locator(`${row('studio')} .docs-address`).textContent(),/tree\/main\/integrations\/studio$/);
+      assert.equal(await v.frame.locator('a').count(),0);await action(v.frame,'studio','installHost').click();await notice(v,'confirming');
+      await v.host(()=>H.finish('cancelled'));await notice(v,'cancelled');
+    }finally{await v.page.close();}
   });
 
   await isolated('runtime unknown/absent/inactive/failed/unsupported/non-conforming, stale/unavailable catalog and host states',async v=>{
@@ -475,6 +620,13 @@ try {
       const base=locale.split('-')[0];await v.frame.locator('#heading').filter({hasText:T[base].heading}).waitFor();
       assert.equal(await v.frame.locator('html').getAttribute('dir'),base==='he'?'rtl':'ltr');
       assert.equal(await v.frame.locator('#refresh').getAttribute('aria-label'),T[base].refresh);
+      assert.equal(await docs(v).getAttribute('aria-label'),T[base].docs+' · OpenCode for Studio');
+      for(const [outcome,key] of [['requested','docsRequested'],['unavailable','docsUnavailable'],['busy','docsBusy'],['invalid','docsInvalid'],['error','docsUnavailable']]){
+        await v.host(outcome=>{H.docsMode=outcome==='error'?'error':{outcome};},outcome);await clickDocs(v);
+        assert.equal(await docsFeedback(v).textContent(),T[base][key]);
+        assert.equal(await v.frame.locator('body').evaluate(node=>node.scrollWidth<=node.clientWidth),true,locale+'/'+outcome+' no overflow');
+      }
+      assert.equal(await v.frame.locator(`${row('studio')} .docs-address`).getAttribute('dir'),'ltr');
       assert.equal(await v.frame.locator('body').evaluate(node=>node.scrollWidth<=node.clientWidth),true,locale+' no overflow');
       for(const kind of installationStates){
         await refresh(v,installationFixture(kind));
@@ -510,7 +662,7 @@ try {
       for(const id of ['studio','vendor','service'])await expand(v,id);
       await v.host(({appearance,colors})=>H.update({appearance,colors}),{appearance,colors:palettes[appearance]});
       await v.frame.locator('body').evaluate((_,source)=>(0,eval)(source),axeSource);
-      for(const scenario of ['normal','attached','host-unknown','host-absent','host-incompatible','unknown-failed','non-conforming','stale','unavailable',...installationStates]){
+      for(const scenario of ['normal','attached','host-unknown','host-absent','host-incompatible','unknown-failed','non-conforming','stale','unavailable',...installationStates,'docs-requested','docs-unavailable','docs-busy','docs-invalid','docs-error']){
         const f=installationStates.includes(scenario)?installationFixture(scenario):fixture();
         if(scenario==='attached')f.state.integrations[0].attachment={state:'attached',label:'This fixture scene'};
         if(scenario.startsWith('host-'))f.state.integrations[0].status.host={state:scenario.slice(5),...(scenario==='host-absent'?{action:'install'}:{})};
@@ -518,6 +670,7 @@ try {
         if(scenario==='non-conforming')f.state.integrations[0].state='non-conforming';
         if(['stale','unavailable'].includes(scenario))f.catalog.state=f.state.catalog.state=scenario;
         await refresh(v,f);
+        if(scenario.startsWith('docs-')){await v.host(outcome=>{H.docsMode=outcome==='error'?'error':{outcome};},scenario.slice(5));await clickDocs(v);}
         const audit=await v.frame.locator('body').evaluate(async()=>{const result=await axe.run(document,{runOnly:{type:'tag',values:['wcag2a','wcag2aa','wcag21aa','best-practice']}});const nodes=values=>values.map(({target,failureSummary,html})=>({target,failureSummary,html}));return {version:axe.version,violations:result.violations.map(({id,impact,nodes:items})=>({id,impact,nodes:nodes(items)})),incomplete:result.incomplete.map(({id,nodes:items})=>({id,nodes:nodes(items)})),passes:result.passes.length};});
         assert.equal(audit.version,axePin.version);
         audits.push({appearance,scenario,...audit});await capture(v,`axe-${appearance}-${scenario}`);
@@ -528,7 +681,7 @@ try {
   }else console.log('GAP: AXE_CORE_PATH absent; no automated accessibility audit claimed. Keyboard/ARIA checks are not an axe audit.');
 
   await test('no browser/CSP/schema-wire errors',async()=>assert.deepEqual(errors,[]));
-  const evidence={scope:'Simulated MessagePort host, real packaged iframe/validator/frame-document. Not actual ExtensionPanel, trusted host confirmation or native backend.',pin:PIN,sourceHashes,packageDigest:pkg.digest,
+  const evidence={scope:'MOCK MessagePort host, real ZIP-extracted HTML/validator/frame-document. Not actual ExtensionPanel, trusted host confirmation, external opener or native backend.',pin:PIN,sourceHashes,catalogue:{commit:'54d6e5d0f4c22e74d228822fcaaa0912818a8b46',blob:catalogBlob},packageDigest:pkg.digest,
     passed:results.length,failed:failures.length,failures,audits,captures,gaps:[...(!process.env.AXE_CORE_PATH?['axe audit absent']:[]),...(!captures.length?['screenshots not requested (CODENOMAD_PANEL_CAPTURE_DIR absent)']:[]),
       'Native confirmation/backend/ExtensionPanel integration outside simulated-host scope',...(audits.some(audit=>audit.incomplete.length)?['axe incomplete rules require manual review (see audit JSON)']:[])],axeSource:process.env.AXE_CORE_PATH?{path:path.resolve(process.env.AXE_CORE_PATH),...axePin}:null};
   const evidenceDir=process.env.CODENOMAD_PANEL_CAPTURE_DIR;

@@ -7,7 +7,7 @@ manifest requests `session.context`, `bundles.read` and `bundles.manage`.
 ## Supported contract
 
 The panel targets CodeNomad commit
-`bea9af583b88481f35b3470930d48458fecfdded`: its bundles projection schemas,
+`abb5789658dfb66a1c24af7fff498ab21b9425f3`: its bundles projection schemas,
 fixed public bridge, archive validator and sandbox frame. A host implementing
 that contract is required. The panel uses HTML, CSS and JavaScript directly,
 with ten locale dictionaries, Hebrew RTL and the host's six colour roles.
@@ -45,7 +45,19 @@ Events invalidate display snapshots; idle panels perform no polling.
 
 No package specs, native paths, RPC selectors, foreign sessions, binding
 authorities, credentials or executable URLs are accepted from panel controls.
-Documentation addresses remain selectable plain text inside the sandbox.
+Each row has a keyboard-accessible Documentation action, including when collapsed.
+It calls only `bundles.openDocs({ integration })` under the read permission.
+`requested` means handed to CodeNomad's external opener; browser display depends
+on the platform and popup policy. `unavailable`, `busy`, `invalid` and uncertain
+transport results give bounded localized feedback beside that row, independently
+of management confirmations. The pinned bridge maps transport failures/timeouts
+to `unavailable` and read-admission refusal to `busy`.
+Documentation addresses remain selectable, direction-isolated plain text inside
+the sandbox for manual use. An older bridge without the method reports unavailable.
+Only the host resolves and validates canonical same-ID catalogue README/tree URLs.
+One documentation request can be pending across rows, with a one-second local
+dispatch interval; another explicit action is needed to retry. No completion,
+refresh, event, locale change or idle timer reopens documentation.
 
 ## Build and check
 
@@ -61,10 +73,17 @@ The ZIP contains root `manifest.json` and `panel.html` only; the adjacent
 `.sha256` identifies its exact deterministic bytes. No release, catalogue entry
 or publishing workflow is part of this draft.
 
-The browser check exports the six consumed runtime files directly from the
+The browser check exports the seven consumed runtime files directly from the
 immutable Git commit; checkout HEAD, index and working files are irrelevant.
 It reads **the HTML returned from the packaged ZIP** through the real pinned
-validator and frame generator. Its host is simulated over a real MessagePort.
+validator and frame generator. Its host is **MOCK**, over a real MessagePort.
+The integration catalogue fixture, normalized to Git's UTF-8/LF bytes, has Git blob
+`752451bff8d9e3779b8dbf3087cca2ab16492804` from integrations commit
+`54d6e5d0f4c22e74d228822fcaaa0912818a8b46`; its Blender README is exercised
+through an explicit public-field projection. The mock documentation policy uses
+the pinned strict input/result schemas and canonical URL validator. An immutable
+older frame checks the missing-method fallback. Native HTTP/opener behavior needs
+its own host qualification.
 It checks schemas, three families, errors/unknown/stale states,
 keyboard/ARIA, scope selection, action admission without early success or replay,
 exact surviving iframe-trigger focus, fallback focus, context fences, lifecycle,
@@ -84,9 +103,9 @@ Test tools stay outside the product archive.
 | AC-E2, managed actions | Fixed public calls, admitted/submitted outcomes and state reconciliation checked with a simulated host | Run the actual archive through ExtensionPanel, trusted confirmations and native backend. Author `detach` is refused at the pinned trust boundary; a trusted D24 control/API placement requires review. |
 | AC-E3, accessibility | Keyboard, named regions, polite grouped updates, stable disclosures, exact surviving-trigger/fallback focus and both-palette axe checks | Manual screen-reader review; real host confirmation/iframe-unmount focus checks. Axe incomplete checks require explicit review. |
 | AC-E4, catalogue publication | Code-only draft PR | Explicit publication authorization, release and catalogue entry. |
-| §5.1, documentation | Safe non-navigating text | Fixed reviewed host documentation opener. |
+| §5.1, documentation | Fixed ID-only action; four honest outcomes, transport/older-host fallback, malicious URL rejection and non-navigating text checked with the actual catalogue README | Qualify this archive through the actual parent/backend and platform opener; `requested` records handoff only. |
 
-The configured check performs 29 checks and 38 axe audits across both palettes,
+The configured check performs 36 checks and 48 axe audits across both palettes,
 including pending, unconfirmed, undeclared-loaded, ID-less failed, disabled and
 older-host states. Screenshots carry a synthetic-data/test-preview banner.
 Axe's Refresh-glyph contrast check remains incomplete; the test independently
