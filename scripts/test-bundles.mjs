@@ -290,6 +290,39 @@ try {
     await v.page.waitForTimeout(70);assert.equal(await isFocused(v.frame.locator('#refresh')),true);
   });
 
+  await isolated('delayed state reconciliation preserves visible focus when the restored action becomes hidden',async v=>{
+    const trigger=action(v.frame,'studio','installHost');await trigger.click();await notice(v,'confirming');
+    const f=fixture();f.state.integrations[0].status.host={state:'ok',partVersion:'1.0.0',expectedRange:'^1.0.0'};
+    validateFixture(f);
+    await v.host(f=>{Object.assign(H,f);H.hold=['catalog','state'];H.finish('confirmed');},f);await notice(v,'confirmed');
+    await v.page.waitForFunction(()=>H.held.length===2);await v.page.waitForTimeout(100);
+    assert.equal(await isFocused(trigger),true,'native-frame focus restored before delayed state');
+    await v.host(()=>H.release());await settle(v);
+    assert.equal(await trigger.count(),0);assert.equal(await isFocused(v.frame.locator('#title-studio')),true);
+    assert.equal((await mutations(v)).length,1);
+  });
+
+  await isolated('retained unavailable offers translate; successful offer refresh keeps its exact focused button',async v=>{
+    const attach=action(v.frame,'studio','attach').first();await attach.focus();
+    await attach.evaluate(node=>window.savedTrigger=node);await refresh(v);
+    assert.equal(await attach.evaluate(node=>node===window.savedTrigger&&node===document.activeElement),true);
+    await v.host(()=>{H.hostsError=true;});await refresh(v);
+    assert.equal(await isFocused(v.frame.locator('#title-studio')),true,'disabled focused offer falls back');
+    await v.host(()=>H.update({locale:'fr'}));
+    assert.equal(await attach.textContent(),T.fr.attach);assert.equal(await attach.isDisabled(),true);
+    assert.match(await v.frame.locator('.offer .muted').first().textContent(),new RegExp(T.fr.protocol));
+    assert.equal(await v.frame.locator('#notice').textContent(),T.fr.updated);
+  });
+
+  await isolated('state changes do not steal focus from the simulated host while confirmation is open',async v=>{
+    await action(v.frame,'studio','installHost').click();await notice(v,'confirming');
+    await v.page.locator('body').evaluate(node=>{node.tabIndex=-1;node.focus();});
+    const f=fixture();f.state.integrations[0].status.host={state:'ok'};await refresh(v,f);
+    assert.equal(await v.page.locator('body').evaluate(node=>node===document.activeElement),true);
+    await v.host(()=>H.finish('confirmed'));await notice(v,'confirmed');await v.page.waitForTimeout(70);
+    assert.equal(await isFocused(v.frame.locator('#title-studio')),true);
+  });
+
   await isolated('busy/invalid/transport error give explicit outcome and no automatic mutation retry',async v=>{
     for(const [mode,key] of [['busy','busy'],['invalid','invalid'],['error','requestFailed'],['busy-error','requestFailed']]){
       await v.host(mode=>{H.mode=mode;},mode);const before=(await mutations(v)).length;

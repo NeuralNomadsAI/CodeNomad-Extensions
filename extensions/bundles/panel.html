@@ -219,6 +219,12 @@ THE SOFTWARE. -->
     locked=value;
     for(const control of document.querySelectorAll('[data-manage]')) control.setAttribute('aria-disabled',String(value));
   }
+  function preserveFocus(trigger,row) {
+    if(!document.hasFocus() || !row || !trigger || (document.activeElement!==trigger && document.activeElement!==document.body))return;
+    if(trigger.isConnected && trigger.getClientRects().length && !trigger.disabled) {
+      if(document.activeElement!==trigger)trigger.focus();
+    } else (row.disclosure.isConnected ? row.disclosure : $('refresh')).focus();
+  }
   function fallback(trigger,row) {
     // The native frame restores the exact surviving trigger. Handle hidden/removed origins only.
     const mine=epoch;
@@ -336,25 +342,32 @@ THE SOFTWARE. -->
     renderOffers(row);disclose(row);
   }
   function renderOffers(row) {
+    const focused=document.activeElement;
     const native=row.entry.family==='native',result=row.hosts,state=row.state;
     row.offersHint.hidden=!native;
     row.offersHint.textContent=result?.offers.length?'':t(result?'noOffers':'offersUnknown',{app:row.entry.app.name});
     const seen=new Set();
-    if(!result) {for(const item of row.offers.values())item.attach.disabled=true;return;}
+    if(!result) {for(const item of row.offers.values()){offerText(item);item.attach.disabled=true;}preserveFocus(focused,row);return;}
     for(const offer of result.offers) {
       seen.add(offer.offerID);
       let item=row.offers.get(offer.offerID);
       if(!item) {const box=node('div','offer'),label=node('p'),description=node('p','muted');box.append(label,description);
         const attach=action(box,row,'attach','attach',()=>({integration:row.entry.id,offerID:offer.offerID}));
         item={box,label,description,attach};row.offers.set(offer.offerID,item);row.offersList.append(box);}
-      item.label.textContent=offer.label;
-      item.description.textContent=[offer.document,offer.appVersion,t('protocol')+': '+t(offer.protocol)].filter(Boolean).join(' · ');
-      item.attach.textContent=t('attach');item.attach.disabled=offer.protocol!=='ok' || !context?.sessionId || state?.state!=='ok'
+      item.offer=offer;offerText(item);
+      item.attach.disabled=offer.protocol!=='ok' || !context?.sessionId || state?.state!=='ok'
         || state?.status?.host?.state==='unsupported' || state?.attachment.state!=='none' || catalog?.state==='unavailable';
     }
     for(const [key,item] of row.offers)if(!seen.has(key)){const focused=item.box.contains(document.activeElement);item.box.remove();row.offers.delete(key);if(focused)row.disclosure.focus();}
+    preserveFocus(focused,row);
+  }
+  function offerText(item) {
+    const offer=item.offer;item.label.textContent=offer.label;
+    item.description.textContent=[offer.document,offer.appVersion,t('protocol')+': '+t(offer.protocol)].filter(Boolean).join(' · ');
+    item.attach.textContent=t('attach');
   }
   function render() {
+    const focused=document.activeElement,focusedRow=[...rows.values()].find(row=>row.section.contains(focused));
     document.title=t('heading');$('heading').textContent=t('heading');$('refresh').setAttribute('aria-label',t('refresh'));$('preview').textContent=t('preview');
     if(noticeKey)$('notice').textContent=t(noticeKey);
     const list=catalog?.integrations??[],states=snapshot?.integrations??[];
@@ -374,6 +387,7 @@ THE SOFTWARE. -->
     }
     for(const [id,row] of rows)if(!seen.has(id)){const focused=row.section.contains(document.activeElement);row.section.remove();rows.delete(id);if(focused)$('refresh').focus();}
     pending(locked);
+    preserveFocus(focused,focusedRow);
   }
   async function refresh() {
     if(!context?.sessionId || !api?.bundles)return;
@@ -383,8 +397,7 @@ THE SOFTWARE. -->
       const [nextCatalog,nextState]=await Promise.all([api.bundles.catalog(),api.bundles.state()]);
       if(mine!==epoch)return;
       catalog=nextCatalog;snapshot=nextState;
-      // An invalidation discards the offer snapshot before reading expanded native sections.
-      for(const row of rows.values())row.hosts=undefined;
+      // Keep the display snapshot while revalidating; each action is fenced by the host.
       render();
       for(const row of rows.values())if(row.open && row.entry.family==='native' && row.state?.state==='ok') {
         try {const hosts=await api.bundles.hosts({integration:row.entry.id});if(mine!==epoch)return;row.hosts=hosts;}catch {row.hosts=undefined;}
