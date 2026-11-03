@@ -126,5 +126,5 @@ D25 removal belongs to the trusted host; the panel performs no session census,
 attachment cleanup or compensating detach/reinstall. A retained valid stale
 catalogue remains usable; an unavailable catalogue disables management.
 
-The repository MIT license applies. Integrations are independent of their
-application vendors; catalogue descriptions supply application requirements.
+The repository MIT license applies. Catalogue descriptions supply application
+requirements.
