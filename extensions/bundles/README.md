@@ -17,9 +17,9 @@ plugin version/configuration/activation, scoped actions and connection state.
 Visible copy is limited to labels, states and actionable errors. Supplementary
 help (unconfirmed loading, Global-only native scope, the OpenCode machine and
 opening the application) sits behind each section's `i` button: named, toggled
-by click, Enter or Space, closed by Escape with focus returned to the button. Native integrations have Global-only management,
-application component status, available offers and the current conversation's
-attachment. Installation offers a scope selector defaulting to Global.
+by click, Enter or Space, closed by Escape with focus returned to the button.
+Native integrations have Global-only management, application component status,
+available offers and the current conversation's attachment. Installation offers a scope selector defaulting to Global.
 Activation uses native three-state checkboxes: mixed means Default, whose
 effective activation remains separate from native loading. The summary counts
 catalogue entries. Each plugin shows its declaration, native loading, effective
@@ -35,8 +35,8 @@ The optional host-supplied `plugin` object carries `declared`, `runtime`
 declared, unloaded, effectively enabled plugin. The trusted parent owns its
 120-second boundary; the iframe renders supplied hints and refreshes on events.
 It has no installation clock, cache or authority. Unconfirmed loading offers
-explicit Refresh, with troubleshooting help in the `i` button. A late submission receipt leaves
-loading governed by the next state read.
+explicit Refresh, with troubleshooting help in the `i` button. A late
+submission receipt leaves loading governed by the next state read.
 
 Install, update and remove call `bundles.request`; activation calls `setActive`;
 application installation calls `installHost`; attaching calls `attach`.
@@ -44,6 +44,8 @@ CodeNomad supplies confirmations, including the removal interruption warning
 and exact declaration/scope checks. An acknowledgement or `confirmed` outcome
 means a request was admitted/submitted. Effective results come from state reads.
 Lost/uncertain results invite explicit refresh; mutations are never replayed.
+A submitted or uncertain outcome notice stays until a state read that started
+after it completes, which then reports refreshed states.
 Events invalidate display snapshots; idle panels perform no polling.
 
 No package specs, native paths, RPC selectors, foreign sessions, binding

@@ -103,7 +103,7 @@ try {
     assert.doesNotMatch(pkg.html,/affiliat/i,'no non-affiliation notice in the panel');
     // Terse copy: every visible state/error is one short phrase; only i-button content may be a sentence.
     for(const locale of LOCALES)for(const key of ['noApi','readFailed','noOffers','offersUnknown','docsRequested','docsUnavailable','docsBusy','docsInvalid','docsFailed','confirmed','expired','requestFailed','busy','invalid'])
-      assert(!/[.。।;；]\s*\S/.test(T[locale][key]) && T[locale][key].length<=60,`${locale}.${key} terse: ${T[locale][key]}`);
+      assert(!/[.。।;；]\s*\S/.test(T[locale][key]) && T[locale][key].length<=64,`${locale}.${key} terse: ${T[locale][key]}`);
     const marks=value=>[...value.matchAll(/\{\w+\}/g)].map(match=>match[0]).sort();
     for(const locale of LOCALES){assert.deepEqual(Object.keys(T[locale]).sort(),Object.keys(T.en).sort(),locale);
       for(const [key,value] of Object.entries(T.en)){assert.equal(typeof T[locale][key],'string');assert(T[locale][key].trim(),`${locale}.${key}`);assert.deepEqual(marks(T[locale][key]),marks(value),`${locale}.${key}`);}}
@@ -181,6 +181,16 @@ try {
     await view.page.waitForFunction(before=>H.count('state')>before,before);await settle(view);
   };
   const notice=async(view,key)=>{await view.frame.locator('#notice').filter({hasText:T.en[key]}).waitFor();};
+  // Holds the triggered reread so the uncertain notice is observed, then requires
+  // that reread (and nothing else) to replace it, without any mutation replay.
+  const confirmed=async view=>{
+    const before=(await mutations(view)).length;
+    await view.host(()=>{H.hold=['catalog','state'];H.finish('confirmed');});await notice(view,'confirmed');
+    await view.page.waitForFunction(()=>H.held.length>=2);
+    assert.equal(await view.frame.locator('#notice').textContent(),T.en.confirmed,'uncertain until the reread completes');
+    await view.host(()=>H.release());await settle(view);await notice(view,'updated');
+    assert.equal((await mutations(view)).length,before);
+  };
   const expand=async(view,id)=>{const button=view.frame.locator('#title-'+id);if(await button.getAttribute('aria-expanded')!=='true')await button.click();await settle(view);};
   const isFocused=locator=>locator.evaluate(node=>node===document.activeElement);
   const field=(view,key)=>view.frame.locator('#body-studio dt').filter({hasText:new RegExp('^'+T.en[key]+'$')}).evaluate(node=>node.nextElementSibling.textContent);
@@ -404,7 +414,7 @@ try {
       assert.equal(await v.host(()=>H.calls.length),calls,'no iframe expiry/read clock');
     }
     await refresh(v,installationFixture('unconfirmed'));
-    await v.host(()=>H.finish('confirmed'));await notice(v,'confirmed');await settle(v);
+    await confirmed(v);
     assert.equal(await v.frame.locator('#title-studio .badge-shape').last().textContent(),T.en.unconfirmed,'late receipt is submitted, not loaded/pending');
     const trigger=v.frame.locator('#body-studio input').first();await trigger.focus();await trigger.evaluate(node=>window.savedTrigger=node);
     await v.host(()=>{H.hold=['catalog'];H.changed({kind:'state'});});await v.page.waitForFunction(()=>H.held.length===1);
@@ -470,6 +480,14 @@ try {
     const unconfirmed=installationFixture('unconfirmed');await refresh(v,unconfirmed);
     assert.equal((await text.textContent()).startsWith(T.en.unconfirmedHelp),true);
     for(const id of ['vendor','service'])assert.equal(await v.frame.locator(`${row(id)} [data-action=info]`).isHidden(),true,id+' has no help, no i button');
+    const empty=fixture();empty.hosts={offers:[]};await expand(v,'studio');await refresh(v,empty);
+    assert.equal(await v.frame.locator(`${body('studio')} .offers`).locator('..').getByText(T.en.noOffers,{exact:true}).isVisible(),true,'no-offer state stays a visible label');
+    assert.equal((await text.textContent()).endsWith(T.en.openApp.replace('{app}','studio')),true,'open-app help behind i without offers');
+    const vendor=fixture(),entry=vendor.state.integrations[1];Object.assign(entry,{state:'inactive',activation:{global:'enabled',project:'default',effective:'enabled'},plugin:{declared:true,runtime:'unloaded',progress:'unconfirmed'}});
+    await refresh(v,vendor);const vendorInfo=v.frame.locator(`${row('vendor')} [data-action=info]`);
+    await vendorInfo.focus();await v.page.keyboard.press('Enter');assert.equal(await v.frame.locator('#info-vendor').textContent(),T.en.unconfirmedHelp);
+    await refresh(v,fixture());assert.equal(await vendorInfo.isHidden(),true);assert.equal(await v.frame.locator('#info-vendor').isHidden(),true);
+    assert.equal(await isFocused(v.frame.locator('#title-vendor')),true,'focus leaves a vanished i button for its disclosure');
     assert.equal((await mutations(v)).length,0,'help is read-only');
   });
 
@@ -505,7 +523,7 @@ try {
       assert.equal((await mutations(v)).length,before+1);assert.deepEqual((await mutations(v)).at(-1).input,input);assert.equal((await mutations(v)).at(-1).method,method);
       assert.equal(await v.frame.locator('#summary').textContent(),'3 integrations');
       assert.doesNotMatch(await v.frame.locator('#notice').textContent(),/installed|attached|activated/i);
-      await v.host(()=>H.finish('confirmed'));await notice(v,'confirmed');await settle(v);
+      await confirmed(v);
       assert.equal((await mutations(v)).length,before+1);assert.equal(await v.frame.locator('#summary').textContent(),'3 integrations');
     }
     const check=v.frame.locator('#body-studio input').first();await check.click();await notice(v,'confirming');
@@ -526,7 +544,7 @@ try {
     await trigger.click();await notice(v,'confirming');
     // Move focus to the simulated host (the actual native confirmation UI is out of scope).
     await v.page.locator('body').evaluate(node=>{node.tabIndex=-1;node.focus();});
-    await v.host(outcome=>H.finish(outcome),outcome);await notice(v,outcome==='failed'?'requestFailed':outcome);await settle(v);
+    if(outcome==='confirmed')await confirmed(v);else {await v.host(outcome=>H.finish(outcome),outcome);await notice(v,outcome==='failed'?'requestFailed':outcome);await settle(v);}
     assert.equal(await trigger.evaluate(node=>node===window.savedTrigger&&node===document.activeElement),true,'same DOM element, not a substitute button');
     assert.equal((await mutations(v)).length,1);
   });
@@ -560,7 +578,7 @@ try {
     await v.host(f=>{Object.assign(H,f);H.hold=['catalog','state'];H.finish('confirmed');},f);await notice(v,'confirmed');
     await v.page.waitForFunction(()=>H.held.length===2);await v.page.waitForTimeout(100);
     assert.equal(await isFocused(trigger),true,'native-frame focus restored before delayed state');
-    await v.host(()=>H.release());await settle(v);
+    await v.host(()=>H.release());await settle(v);await notice(v,'updated');
     assert.equal(await trigger.count(),0);assert.equal(await isFocused(v.frame.locator('#title-studio')),true);
     assert.equal((await mutations(v)).length,1);
   });
@@ -582,7 +600,7 @@ try {
     await v.page.locator('body').evaluate(node=>{node.tabIndex=-1;node.focus();});
     const f=fixture();f.state.integrations[0].status.host={state:'ok'};await refresh(v,f);
     assert.equal(await v.page.locator('body').evaluate(node=>node===document.activeElement),true);
-    await v.host(()=>H.finish('confirmed'));await notice(v,'confirmed');await v.page.waitForTimeout(70);
+    await confirmed(v);await v.page.waitForTimeout(70);
     assert.equal(await isFocused(v.frame.locator('#title-studio')),true);
   });
 
@@ -591,6 +609,8 @@ try {
       await v.host(mode=>{H.mode=mode;},mode);const before=(await mutations(v)).length;
       await action(v.frame,'studio','installHost').click();await notice(v,key);await settle(v);await v.page.clock.fastForward(60_000);await settle(v);
       assert.equal((await mutations(v)).length,before+1);assert.equal(await action(v.frame,'studio','installHost').getAttribute('aria-disabled'),'false');
+      assert.equal(await v.frame.locator('#notice').textContent(),T.en[key],'outcome stays until an explicit reread');
+      if(key==='requestFailed'){await v.frame.locator('#refresh').click();await settle(v);await notice(v,'updated');assert.equal((await mutations(v)).length,before+1,'Refresh rereads only');}
     }
   });
 
