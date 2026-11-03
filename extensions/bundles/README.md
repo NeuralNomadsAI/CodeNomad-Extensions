@@ -19,7 +19,8 @@ help (unconfirmed loading, Global-only native scope, the OpenCode machine and
 opening the application) sits behind each section's `i` button: named, toggled
 by click, Enter or Space, closed by Escape with focus returned to the button.
 Native integrations have Global-only management, application component status,
-available offers and the current conversation's attachment. Installation offers a scope selector defaulting to Global.
+available offers and the current conversation's attachment. Installation
+offers a scope selector defaulting to Global.
 Activation uses native three-state checkboxes: mixed means Default, whose
 effective activation remains separate from native loading. The summary counts
 catalogue entries. Each plugin shows its declaration, native loading, effective
@@ -44,8 +45,8 @@ CodeNomad supplies confirmations, including the removal interruption warning
 and exact declaration/scope checks. An acknowledgement or `confirmed` outcome
 means a request was admitted/submitted. Effective results come from state reads.
 Lost/uncertain results invite explicit refresh; mutations are never replayed.
-A submitted or uncertain outcome notice stays until a state read that started
-after it completes, which then reports refreshed states.
+A submitted, uncertain or refused outcome notice stays until a state read that
+started after it completes, which then reports refreshed states.
 Events invalidate display snapshots; idle panels perform no polling.
 
 No package specs, native paths, RPC selectors, foreign sessions, binding

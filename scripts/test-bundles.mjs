@@ -610,7 +610,7 @@ try {
       await action(v.frame,'studio','installHost').click();await notice(v,key);await settle(v);await v.page.clock.fastForward(60_000);await settle(v);
       assert.equal((await mutations(v)).length,before+1);assert.equal(await action(v.frame,'studio','installHost').getAttribute('aria-disabled'),'false');
       assert.equal(await v.frame.locator('#notice').textContent(),T.en[key],'outcome stays until an explicit reread');
-      if(key==='requestFailed'){await v.frame.locator('#refresh').click();await settle(v);await notice(v,'updated');assert.equal((await mutations(v)).length,before+1,'Refresh rereads only');}
+      if(['requestFailed','invalid'].includes(key)){await v.frame.locator('#refresh').click();await settle(v);await notice(v,'updated');assert.equal((await mutations(v)).length,before+1,'Refresh rereads only');}
     }
   });
 
