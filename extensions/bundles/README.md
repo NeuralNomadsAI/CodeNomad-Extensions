@@ -13,8 +13,11 @@ that contract is required. The panel uses HTML, CSS and JavaScript directly,
 with ten locale dictionaries, Hebrew RTL and the host's six colour roles.
 
 Each catalogue integration has an accessible disclosure, description,
-non-affiliation notice, plugin version/configuration/activation, scoped actions
-and connection state. Native integrations have Global-only management,
+plugin version/configuration/activation, scoped actions and connection state.
+Visible copy is limited to labels, states and actionable errors. Supplementary
+help (unconfirmed loading, Global-only native scope, the OpenCode machine and
+opening the application) sits behind each section's `i` button: named, toggled
+by click, Enter or Space, closed by Escape with focus returned to the button. Native integrations have Global-only management,
 application component status, available offers and the current conversation's
 attachment. Installation offers a scope selector defaulting to Global.
 Activation uses native three-state checkboxes: mixed means Default, whose
@@ -32,7 +35,7 @@ The optional host-supplied `plugin` object carries `declared`, `runtime`
 declared, unloaded, effectively enabled plugin. The trusted parent owns its
 120-second boundary; the iframe renders supplied hints and refreshes on events.
 It has no installation clock, cache or authority. Unconfirmed loading offers
-explicit Refresh and troubleshooting help. A late submission receipt leaves
+explicit Refresh, with troubleshooting help in the `i` button. A late submission receipt leaves
 loading governed by the next state read.
 
 Install, update and remove call `bundles.request`; activation calls `setActive`;
@@ -105,15 +108,17 @@ Test tools stay outside the product archive.
 | AC-E4, catalogue publication | Code-only draft PR | Explicit publication authorization, release and catalogue entry. |
 | §5.1, documentation | Fixed ID-only action; four honest outcomes, transport/older-host fallback, malicious URL rejection and non-navigating text checked with the actual catalogue README | Qualify this archive through the actual parent/backend and platform opener; `requested` records handoff only. |
 
-The configured check performs 36 checks and 48 axe audits across both palettes,
-including pending, unconfirmed, undeclared-loaded, ID-less failed, disabled and
-older-host states. Screenshots carry a synthetic-data/test-preview banner.
+The configured check performs 37 checks and 50 axe audits across both palettes,
+including pending, unconfirmed, undeclared-loaded, ID-less failed, disabled,
+older-host and open-help states. Screenshots carry a synthetic-data/test-preview banner.
 Axe's Refresh-glyph contrast check remains incomplete; the test independently
-measures its foreground/background contrast in both palettes. Manual review
+measures its and the `i` glyph's foreground/background contrast in both palettes. Manual review
 remains part of AC-E3.
 
-The D24 placement remains an open host decision. This panel supplies no detach
-button, synthetic click proof, author confirmation or destructive direct message.
+With a binding read as attached, the connection shows an inert Attached label and
+the offers' Attach buttons are removed; the CodeNomad-rendered D24 control owns
+detaching. This panel supplies no detach button, synthetic click proof, author
+confirmation or destructive direct message.
 D25 removal belongs to the trusted host; the panel performs no session census,
 attachment cleanup or compensating detach/reinstall. A retained valid stale
 catalogue remains usable; an unavailable catalogue disables management.

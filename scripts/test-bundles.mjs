@@ -97,8 +97,13 @@ try {
     assert.match(pkg.html,/MIT License — Copyright \(c\) 2026 NeuralNomadsAI/);
   });
   assert(pkg,'cannot run author bytes without successful archive validation');
-  await test('10 actual locale dictionaries, exactly 100 keys, nonempty strings and placeholder parity',async()=>{
-    assert.deepEqual(Object.keys(T).sort(),[...LOCALES].sort());assert.equal(Object.keys(T.en).length,100);
+  await test('10 actual locale dictionaries, exactly 98 keys, nonempty strings and placeholder parity; removed helper prose absent',async()=>{
+    assert.deepEqual(Object.keys(T).sort(),[...LOCALES].sort());assert.equal(Object.keys(T.en).length,98);
+    for(const locale of LOCALES)for(const key of ['detachGap','nonAffiliation','docsGap'])assert.equal(key in T[locale],false,`${locale}.${key} removed`);
+    assert.doesNotMatch(pkg.html,/affiliat/i,'no non-affiliation notice in the panel');
+    // Terse copy: every visible state/error is one short phrase; only i-button content may be a sentence.
+    for(const locale of LOCALES)for(const key of ['noApi','readFailed','noOffers','offersUnknown','docsRequested','docsUnavailable','docsBusy','docsInvalid','docsFailed','confirmed','expired','requestFailed','busy','invalid'])
+      assert(!/[.。।;；]\s*\S/.test(T[locale][key]) && T[locale][key].length<=60,`${locale}.${key} terse: ${T[locale][key]}`);
     const marks=value=>[...value.matchAll(/\{\w+\}/g)].map(match=>match[0]).sort();
     for(const locale of LOCALES){assert.deepEqual(Object.keys(T[locale]).sort(),Object.keys(T.en).sort(),locale);
       for(const [key,value] of Object.entries(T.en)){assert.equal(typeof T[locale][key],'string');assert(T[locale][key].trim(),`${locale}.${key}`);assert.deepEqual(marks(T[locale][key]),marks(value),`${locale}.${key}`);}}
@@ -203,7 +208,9 @@ try {
     assert.equal(await native.locator('.disclosure .badge-shape').last().textContent(),T.en.outdated);
     assert.equal(await action(v.frame,'studio','install').count(),0);
     assert.equal(await native.locator('.scope').filter({visible:true}).count(),1);
-    assert.match(await native.textContent(),/Native integrations use Global only/);
+    assert.equal(await native.locator('.info-text').isHidden(),true,'help collapsed by default');
+    assert.equal(await native.locator('.info-text').textContent(),[T.en.globalOnly,T.en.machine].join(''),'Global-only and machine help behind i');
+    assert.doesNotMatch(await v.frame.locator(body('studio')).textContent(),/Global only|machine running/,'no inline helper prose');
     assert.equal(await native.locator('input').first().evaluate(node=>node.indeterminate&&!node.checked),true);
     assert.equal(await v.frame.locator('a,[onclick*=open],form').count(),0,'docs are non-navigating text');
     assert.match(await native.textContent(),/https:\/\/github.com\/NeuralNomadsAI\/opencode-integrations\//);
@@ -343,7 +350,9 @@ try {
       if(host==='outdated')Object.assign(f.state.integrations[0].status.host,{partVersion:'0.9.0',action:'update'});
       await refresh(v,f);
       assert.equal(await action(v.frame,'studio','installHost').count(),['absent','outdated'].includes(host)?1:0,host+' install guard');
-      if(host==='unknown')assert.match(await v.frame.locator(body('studio')).textContent(),/Open studio and enable/);
+      const info=await v.frame.locator(`${row('studio')} .info-text`).textContent();
+      assert.equal(info.includes(T.en.openApp.replace('{app}','studio')),host==='unknown',host+' open-app help only behind i');
+      assert.doesNotMatch(await v.frame.locator(body('studio')).textContent(),/Open studio and enable/);
     }
     const stale=fixture();stale.catalog.state=stale.state.catalog.state='stale';await refresh(v,stale);
     assert.match(await v.frame.locator('#catalog').textContent(),/Catalogue unavailable · last valid catalogue/);
@@ -365,7 +374,8 @@ try {
       assert.equal(await v.frame.locator('#title-studio .muted').textContent(),kind==='absent'?T.en.notInstalled:T.en.versionUnknown);
       assert.equal(await action(v.frame,'studio','install').count(),kind==='absent'?1:0,'no duplicate or inferred install');
       assert.equal(await action(v.frame,'studio','installHost').count(),['active-no-version','undeclared-active'].includes(kind)?1:0);
-      assert.equal(await v.frame.locator(body('studio')).getByText(T.en.unconfirmedHelp,{exact:true}).isVisible(),kind==='unconfirmed');
+      assert.equal(await v.frame.locator(body('studio')).getByText(T.en.unconfirmedHelp).count(),0,'no inline troubleshooting prose');
+      assert.equal((await v.frame.locator(`${row('studio')} .info-text`).textContent()).includes(T.en.unconfirmedHelp),kind==='unconfirmed');
       assert.match(await v.frame.locator(body('studio')).textContent(),/This conversation: Unknown/,'unknown attachment never becomes none');
     }
     // The strict schema bounds shape; defensive display also ignores progress
@@ -413,20 +423,54 @@ try {
     await refresh(v,installationFixture('pending'));await capture(v,'installation-en-cours-fr-test-preview');
   });
 
-  await isolated('foreign-only binding projection is none with offers; unknown attachment disables attach; no author detach',async v=>{
+  await isolated('foreign-only binding projection is none with offers; unknown attachment disables attach; attached shows inert badge only',async v=>{
     await expand(v,'studio');
     assert.match(await v.frame.locator(body('studio')).textContent(),/This conversation: Not attached/);
     const attach=action(v.frame,'studio','attach');assert.equal(await attach.count(),2);
     assert.equal(await attach.nth(0).isDisabled(),false);assert.equal(await attach.nth(1).isDisabled(),true);
+    const badge=v.frame.locator(`${body('studio')} [data-state=attached]`);
     for(const state of ['unknown','attached','none']){
       const f=fixture();f.state.integrations[0].attachment=state==='attached'?{state,label:'This fixture scene'}:{state};await refresh(v,f);
-      assert.equal(await action(v.frame,'studio','attach').first().isDisabled(),state!=='none');
+      assert.equal(await action(v.frame,'studio','attach').count(),state==='attached'?0:2,'Attach replaced while attached');
+      if(state!=='attached')assert.equal(await action(v.frame,'studio','attach').first().isDisabled(),state!=='none');
       assert.equal(await v.frame.locator('[data-action=detach]').count(),0);
-      if(state==='attached')assert.match(await v.frame.locator(body('studio')).textContent(),/trusted CodeNomad control/);
+      assert.equal(await badge.isVisible(),state==='attached');
     }
-    await v.host(()=>{H.hostsError=true;});await refresh(v);
+    const f=fixture();f.state.integrations[0].attachment={state:'attached',label:'This fixture scene'};await refresh(v,f);
+    assert.equal(await v.frame.locator(`${body('studio')} .group`).last().locator('p').first().textContent(),'This conversation: Attached · This fixture scene');
+    assert.deepEqual(await badge.evaluate(node=>({tag:node.tagName,role:node.getAttribute('role'),tab:node.tabIndex,click:typeof node.onclick==='function',focusable:node.matches('button,a,input,select,[tabindex]'),interactive:node.querySelector('button,a,input,[tabindex]')!==null})),
+      {tag:'SPAN',role:null,tab:-1,click:false,focusable:false,interactive:false},'inert label, not a control');
+    const calls=await v.host(()=>H.calls.length);
+    for(let i=0;i<2;i++){await badge.click();await badge.dblclick();await badge.evaluate(node=>node.dispatchEvent(new KeyboardEvent('keydown',{key:'Enter',bubbles:true})));}
+    await settle(v);assert.equal(await v.host(()=>H.calls.length),calls,'badge clicks and keys send nothing');
+    assert.equal(await v.host(()=>H.calls.filter(call=>call.method==='detach').length),0);assert.equal((await mutations(v)).length,0);
+    await v.frame.locator('#title-studio').focus();for(let i=0;i<40;i++){await v.page.keyboard.press('Tab');assert.equal(await badge.evaluate(node=>node===document.activeElement),false,'badge never in tab order');}
+    await v.host(()=>{H.hostsError=true;});await refresh(v,fixture());
     assert.equal(await action(v.frame,'studio','attach').first().isDisabled(),true);
-    assert.match(await v.frame.locator(body('studio')).textContent(),/Could not check available applications|Available applications could not be checked/);
+    assert.match(await v.frame.locator(body('studio')).textContent(),new RegExp(T.en.offersUnknown.replace(/[.*+?^${}()|[\]\\]/g,'\\$&')));
+  });
+
+  await isolated('section i button: named, click/Enter/Space toggle, Escape closes with focus return, 10 locales, no inline help',async v=>{
+    const info=v.frame.locator(`${row('studio')} [data-action=info]`),text=v.frame.locator(`${row('studio')} .info-text`);
+    assert.equal(await info.getAttribute('aria-label'),T.en.info+' · OpenCode for Studio');
+    assert.equal(await info.getAttribute('aria-controls'),'info-studio');assert.equal(await info.getAttribute('aria-expanded'),'false');assert.equal(await text.isHidden(),true);
+    await info.click();assert.equal(await info.getAttribute('aria-expanded'),'true');assert.equal(await text.isVisible(),true);
+    await info.click();assert.equal(await text.isHidden(),true);
+    await info.focus();await v.page.keyboard.press('Enter');assert.equal(await text.isVisible(),true);
+    await v.page.keyboard.press('Escape');assert.equal(await text.isHidden(),true);assert.equal(await isFocused(info),true,'Escape returns focus');
+    await v.page.keyboard.press('Space');assert.equal(await text.isVisible(),true);await v.page.keyboard.press('Space');assert.equal(await text.isHidden(),true);
+    await v.page.keyboard.press('Enter');await refresh(v);assert.equal(await text.isVisible(),true,'open state survives a read refresh');assert.equal(await isFocused(info),true);
+    for(const locale of LOCALES){
+      await v.host(locale=>H.update({locale}),locale);await v.frame.locator('#heading').filter({hasText:T[locale].heading}).waitFor();
+      assert.equal(await info.getAttribute('aria-label'),T[locale].info+' · OpenCode for Studio');
+      assert.equal(await text.textContent(),T[locale].globalOnly+T[locale].machine,locale);
+      assert.equal(await v.frame.locator('body').evaluate(node=>node.scrollWidth<=node.clientWidth),true,locale+' no overflow');
+    }
+    await v.host(()=>H.update({locale:'en'}));
+    const unconfirmed=installationFixture('unconfirmed');await refresh(v,unconfirmed);
+    assert.equal((await text.textContent()).startsWith(T.en.unconfirmedHelp),true);
+    for(const id of ['vendor','service'])assert.equal(await v.frame.locator(`${row(id)} [data-action=info]`).isHidden(),true,id+' has no help, no i button');
+    assert.equal((await mutations(v)).length,0,'help is read-only');
   });
 
   await isolated('keyboard disclosure, labelled regions/live status and stable disclosure/focus on read refresh',async v=>{
@@ -644,11 +688,13 @@ try {
       assert.equal(styles.bg,appearance==='dark'?'rgb(29, 36, 48)':'rgb(247, 248, 250)');assert(styles.radii.length>0);assert(styles.radii.every(node=>node.class==='badge-shape'));
       // Axe flags the icon-only glyph as incomplete. Its actual foreground and
       // background still have a measurable text/non-text contrast ratio.
-      const contrast=await v.frame.locator('#refresh').evaluate(node=>{
-        const luminance=color=>{const c=color.match(/[\d.]+/g).slice(0,3).map(Number).map(value=>{const v=value/255;return v<=.04045?v/12.92:((v+.055)/1.055)**2.4;});return .2126*c[0]+.7152*c[1]+.0722*c[2];};
-        const style=getComputedStyle(node),a=luminance(style.color),b=luminance(style.backgroundColor);return (Math.max(a,b)+.05)/(Math.min(a,b)+.05);
-      });
-      assert(contrast>=4.5,`${appearance} Refresh glyph AA contrast: ${contrast}`);
+      for(const glyph of ['#refresh',`${row('studio')} [data-action=info]`]){
+        const contrast=await v.frame.locator(glyph).evaluate(node=>{
+          const luminance=color=>{const c=color.match(/[\d.]+/g).slice(0,3).map(Number).map(value=>{const v=value/255;return v<=.04045?v/12.92:((v+.055)/1.055)**2.4;});return .2126*c[0]+.7152*c[1]+.0722*c[2];};
+          const style=getComputedStyle(node),a=luminance(style.color),b=luminance(style.backgroundColor);return (Math.max(a,b)+.05)/(Math.min(a,b)+.05);
+        });
+        assert(contrast>=4.5,`${appearance} ${glyph} glyph AA contrast: ${contrast}`);
+      }
       await capture(v,'narrow-'+appearance);
     }
   },320);
@@ -662,7 +708,7 @@ try {
       for(const id of ['studio','vendor','service'])await expand(v,id);
       await v.host(({appearance,colors})=>H.update({appearance,colors}),{appearance,colors:palettes[appearance]});
       await v.frame.locator('body').evaluate((_,source)=>(0,eval)(source),axeSource);
-      for(const scenario of ['normal','attached','host-unknown','host-absent','host-incompatible','unknown-failed','non-conforming','stale','unavailable',...installationStates,'docs-requested','docs-unavailable','docs-busy','docs-invalid','docs-error']){
+      for(const scenario of ['normal','attached','host-unknown','host-absent','host-incompatible','unknown-failed','non-conforming','stale','unavailable',...installationStates,'docs-requested','docs-unavailable','docs-busy','docs-invalid','docs-error','info-open']){
         const f=installationStates.includes(scenario)?installationFixture(scenario):fixture();
         if(scenario==='attached')f.state.integrations[0].attachment={state:'attached',label:'This fixture scene'};
         if(scenario.startsWith('host-'))f.state.integrations[0].status.host={state:scenario.slice(5),...(scenario==='host-absent'?{action:'install'}:{})};
@@ -671,6 +717,7 @@ try {
         if(['stale','unavailable'].includes(scenario))f.catalog.state=f.state.catalog.state=scenario;
         await refresh(v,f);
         if(scenario.startsWith('docs-')){await v.host(outcome=>{H.docsMode=outcome==='error'?'error':{outcome};},scenario.slice(5));await clickDocs(v);}
+        if(scenario==='info-open'){const info=v.frame.locator(`${row('studio')} [data-action=info]`);if(await info.getAttribute('aria-expanded')!=='true')await info.click();assert.equal(await v.frame.locator('#info-studio').isVisible(),true);}
         const audit=await v.frame.locator('body').evaluate(async()=>{const result=await axe.run(document,{runOnly:{type:'tag',values:['wcag2a','wcag2aa','wcag21aa','best-practice']}});const nodes=values=>values.map(({target,failureSummary,html})=>({target,failureSummary,html}));return {version:axe.version,violations:result.violations.map(({id,impact,nodes:items})=>({id,impact,nodes:nodes(items)})),incomplete:result.incomplete.map(({id,nodes:items})=>({id,nodes:nodes(items)})),passes:result.passes.length};});
         assert.equal(audit.version,axePin.version);
         audits.push({appearance,scenario,...audit});await capture(v,`axe-${appearance}-${scenario}`);
