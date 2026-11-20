@@ -7,8 +7,9 @@ API 4 `panel.notes` permission; other hosts list it as incompatible.
 
 - **Session**: the note of the displayed conversation, editable once it has been
   read, saved 0.3 s after you stop typing and when the field loses focus.
-  *Insert into message* adds it to that conversation's message box when it fits
-  the box's 2 KB limit; the panel never sends a message.
+  *Insert into message* offers it to that conversation's message box, which takes
+  at most 2 KB and can refuse other text too (an unmatched `{{1}}` marker, for
+  instance); the panel says when nothing was added and never sends a message.
 - **Project**: every note of the project's conversations, newest first, with the
   conversation's title. Selecting a note opens its conversation; a conversation
   this window cannot open says so.

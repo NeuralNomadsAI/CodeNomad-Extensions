@@ -54,7 +54,7 @@ THE SOFTWARE. -->
 <div role="tablist"><button role="tab" id="session" aria-controls="sessionView"></button><button role="tab" id="project" aria-controls="listView"></button><button role="tab" id="orphans" aria-controls="listView"></button></div>
 <section id="sessionView" role="tabpanel" aria-labelledby="session">
   <p id="noSession" class="status" hidden></p>
-  <textarea id="text" spellcheck="true" readonly></textarea>
+  <textarea id="text" spellcheck="true" dir="auto" readonly></textarea>
   <div class="bar" id="sessionBar"><span id="saved" class="status" role="status"></span><button id="insert" type="button" disabled></button><button id="trash" class="trash" type="button" disabled></button></div>
 </section>
 <section id="listView" role="tabpanel" hidden><p id="listStatus" class="status" role="status"></p><ul id="notes"></ul></section>
@@ -81,7 +81,8 @@ THE SOFTWARE. -->
   let words = translations.en, context, view = 'session', notes = null, listing = 0, listFailed = false;
   // The displayed conversation's note: `saved` is what the host holds at `revision`. `epoch` counts
   // edits and saves: a read started before either never replaces the editor.
-  let revision = 0, saved = '', dirty = false, epoch = 0, timer, writes = Promise.resolve(), changed;
+  // `behind`: a reread was skipped while typing; it runs once the editor is clean again.
+  let revision = 0, saved = '', dirty = false, epoch = 0, behind = false, timer, writes = Promise.resolve(), changed;
   // Status messages are kept as keys, so a language change retranslates them.
   const shown = {};
   const session = () => context?.sessionId || null;
@@ -107,7 +108,8 @@ THE SOFTWARE. -->
     const started = epoch;
     try {
       const note = await api.notes.get();
-      if (dirty || epoch !== started) return;
+      if (dirty || epoch !== started) { behind = true; return; }
+      behind = false;
       revision = note?.revision ?? 0; saved = note?.text ?? '';
       if ($('text').value !== saved) $('text').value = saved;
       $('text').readOnly = false;
@@ -118,7 +120,7 @@ THE SOFTWARE. -->
   function save() { clearTimeout(timer); writes = writes.then(write); return writes; }
   async function write() {
     const text = $('text').value;
-    if (text === saved) { if ($('text').value === saved) { dirty = false; say('saved', saved ? 4 : undefined); } return; }
+    if (text === saved) { if ($('text').value === saved) { dirty = false; say('saved', saved ? 4 : undefined); if (behind) read(); } return; }
     try {
       let result = await api.notes.set(text, revision);
       if (result.status === 'conflict') {
@@ -133,7 +135,7 @@ THE SOFTWARE. -->
       }
       if (result.status === 'saved') {
         revision = result.revision; saved = text; epoch++;
-        if ($('text').value === text) { dirty = false; say('saved', text ? 4 : undefined); }
+        if ($('text').value === text) { dirty = false; say('saved', text ? 4 : undefined); behind = false; }
       } else if (result.status === 'no-session') { $('noSession').hidden = false; }
       else say('saved', result.status === 'too-large' ? 17 : result.status === 'full' ? 18 : 6);
     } catch { say('saved', 6); }
@@ -147,7 +149,8 @@ THE SOFTWARE. -->
     const result = await api.composer.prefill({ text }).catch(() => 'invalid');
     say('saved', result === 'added' ? 21 : result === 'too-long' ? 25 : 16);
   };
-  confirming($('trash'), () => { $('text').value = ''; dirty = true; epoch++; controls(); save(); });
+  // Confirmation holds only for the revision the user armed against.
+  confirming($('trash'), () => { $('text').value = ''; dirty = true; epoch++; controls(); save(); }, () => revision);
 
   // Project and orphan lists: every note of the project, newest first. A note that moves between
   // pages (another window saved it) restarts the scan; after three, duplicates are dropped.
@@ -194,10 +197,11 @@ THE SOFTWARE. -->
       const current = note.sessionID === session();
       row.className = current ? 'current' : ''; row.dataset.session = note.sessionID;
       button.type = 'button'; button.className = 'note';
-      title.className = 'title'; title.textContent = note.title || words[14];
+      // User text keeps its own direction inside the panel's.
+      title.className = 'title'; title.dir = 'auto'; title.textContent = note.title || words[14];
       meta.className = 'meta'; meta.title = new Date(note.updated).toLocaleString(context?.locale || 'en');
       meta.textContent = [ago(note.updated), orphans ? words[13] : current ? words[20] : ''].filter(Boolean).join(' · ');
-      preview.className = 'preview'; preview.textContent = note.text;
+      preview.className = 'preview'; preview.dir = 'auto'; preview.textContent = note.text;
       button.append(title, meta, preview);
       if (orphans) {
         button.setAttribute('aria-expanded', String(expanded.has(note.sessionID)));
@@ -211,10 +215,16 @@ THE SOFTWARE. -->
       }
       trash.type = 'button'; trash.className = 'trash';
       confirming(trash, async () => {
+        const index = [...$('notes').children].indexOf(row);
         const result = await api.notes.delete(note.sessionID, note.revision).catch(() => undefined);
         if (current) read();
         await list();
         if (result?.status !== 'deleted') say('listStatus', result ? 23 : 19);
+        // The row is gone: the keyboard moves to its neighbour, else to the tab.
+        if (!document.activeElement || document.activeElement === document.body) {
+          const rows = $('notes').children;
+          (rows[Math.min(index, rows.length - 1)]?.querySelector('.note') ?? $(view)).focus();
+        }
       });
       row.append(button, trash);
       return row;
@@ -223,12 +233,14 @@ THE SOFTWARE. -->
     if (row) row.querySelector(focus.trash ? '.trash' : '.note').focus();
   }
 
-  // Delete: the first click arms the button, a second within 3 s confirms.
-  function confirming(button, run) {
+  // Delete: the first click arms the button, a second within 3 s confirms, unless `version` changed meanwhile.
+  function confirming(button, run, version = () => 0) {
+    let armed;
     const reset = () => { delete button.dataset.armed; button.innerHTML = ICON; button.setAttribute('aria-label', words[9]); button.title = words[9]; };
     reset();
     button.onclick = () => {
-      if (button.dataset.armed) { clearTimeout(button.timer); reset(); run(); return; }
+      if (button.dataset.armed) { clearTimeout(button.timer); reset(); if (version() === armed) run(); return; }
+      armed = version();
       button.dataset.armed = '1'; button.textContent = words[10]; button.setAttribute('aria-label', words[10]);
       button.timer = setTimeout(reset, 3000);
     };
@@ -244,7 +256,7 @@ THE SOFTWARE. -->
     select(next); $(next).focus();
   };
   // Another window, a deleted conversation or a reconnect: read both again.
-  api.notes.onChanged(() => { clearTimeout(changed); changed = setTimeout(() => { if (!dirty) read(); list(); }, 150); });
+  api.notes.onChanged(() => { clearTimeout(changed); changed = setTimeout(() => { if (dirty) behind = true; else read(); list(); }, 150); });
   api.onContext(value => {
     const first = !context; context = value;
     words = translations[value.locale.split('-')[0]] || translations.en;

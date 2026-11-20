@@ -126,6 +126,17 @@ try {
   await frame.getByText('Trop longue pour la zone de saisie (2 Ko max).').waitFor()
   assert.equal((await calls(view, 'prefill')).length, prefills)
 
+  // An armed deletion holds only for the revision it was armed against.
+  await frame.getByRole('button', { name: 'Supprimer' }).click()
+  await view.evaluate(() => { const note = window.notes.get('ses_a'); window.notes.set('ses_a', { ...note, text: 'Remplacée', revision: 4000 }); channel.postMessage({ type: 'notes:changed' }) })
+  await view.waitForFunction(() => true)
+  await frame.locator('#text').evaluate(element => new Promise(resolve => { const check = () => element.value === 'Remplacée' ? resolve() : requestAnimationFrame(check); check() }))
+  const deletions = (await calls(view, 'set')).filter(input => input.text === '').length
+  await frame.getByRole('button', { name: 'Supprimer ?' }).click()
+  await view.waitForTimeout(500)
+  assert.equal((await calls(view, 'set')).filter(input => input.text === '').length, deletions, 'never deletes a revision it did not show when armed')
+  assert.equal(await editor.inputValue(), 'Remplacée')
+
   // A deletion that meets another window's change keeps and shows it.
   await frame.getByRole('button', { name: 'Supprimer' }).click()
   await view.evaluate(() => { const note = window.notes.get('ses_a'); window.notes.set('ses_a', { ...note, text: 'Ailleurs', revision: 5000 }) })
