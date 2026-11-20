@@ -52,10 +52,10 @@ THE SOFTWARE. -->
   [aria-expanded=true] .preview { display:block; }
 </style>
 <div role="tablist"><button role="tab" id="session" aria-controls="sessionView"></button><button role="tab" id="project" aria-controls="listView"></button><button role="tab" id="orphans" aria-controls="listView"></button></div>
-<section id="sessionView" role="tabpanel">
+<section id="sessionView" role="tabpanel" aria-labelledby="session">
   <p id="noSession" class="status" hidden></p>
-  <textarea id="text" spellcheck="true"></textarea>
-  <div class="bar" id="sessionBar"><span id="saved" class="status" role="status"></span><button id="insert" type="button"></button><button id="trash" class="trash" type="button"></button></div>
+  <textarea id="text" spellcheck="true" readonly></textarea>
+  <div class="bar" id="sessionBar"><span id="saved" class="status" role="status"></span><button id="insert" type="button" disabled></button><button id="trash" class="trash" type="button" disabled></button></div>
 </section>
 <section id="listView" role="tabpanel" hidden><p id="listStatus" class="status" role="status"></p><ul id="notes"></ul></section>
 <script>
@@ -63,25 +63,29 @@ THE SOFTWARE. -->
   const $ = id => document.getElementById(id), api = window.codenomad;
   const ICON = '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" aria-hidden="true"><path d="M2.5 4h11M6 4V2.5h4V4M4 4l.7 9.5h6.6L12 4M6.8 6.5v5M9.2 6.5v5"/></svg>';
   // Session, Project, Orphans, placeholder, Saved, Saving, not saved, no conversation, Insert, Delete, Delete?, no notes, no orphans,
-  // conversation deleted, Untitled, Open the conversation, cannot insert, too long, full, unavailable, shown, added, Notes
+  // conversation deleted, Untitled, Open the conversation, cannot insert, too long, full, unavailable, shown, added, Notes,
+  // not deleted (changed elsewhere), cannot open, too long to insert
   const translations = {
-    en:['Session','Project','Orphans','Write a note for this conversation…','Saved','Saving…','Not saved. Keep typing to retry.','Open a conversation to write its note.','Insert into message','Delete','Delete?','No notes in this project yet.','No orphaned notes.','conversation deleted','Untitled','Open the conversation','This note cannot be inserted into the message box.','Note too long (32 KB max).','This project already has 256 notes.','Notes unavailable.','shown','Added to the message box.','Notes'],
-    fr:['Session','Projet','Orphelines','Écrire une note pour cette conversation…','Enregistré','Enregistrement…','Non enregistré. Continuez à écrire pour réessayer.','Ouvrez une conversation pour écrire sa note.','Insérer dans le message','Supprimer','Supprimer ?','Aucune note dans ce projet pour l’instant.','Aucune note orpheline.','conversation supprimée','Sans titre','Ouvrir la conversation','Cette note ne peut pas être insérée dans la zone de saisie.','Note trop longue (32 Ko max).','Ce projet a déjà 256 notes.','Notes indisponibles.','affichée','Ajoutée à la zone de saisie.','Notes'],
-    de:['Sitzung','Projekt','Verwaist','Notiz zu dieser Unterhaltung schreiben…','Gespeichert','Wird gespeichert…','Nicht gespeichert. Weiterschreiben, um es erneut zu versuchen.','Öffnen Sie eine Unterhaltung, um ihre Notiz zu schreiben.','In die Nachricht einfügen','Löschen','Löschen?','Noch keine Notizen in diesem Projekt.','Keine verwaisten Notizen.','Unterhaltung gelöscht','Ohne Titel','Unterhaltung öffnen','Diese Notiz kann nicht in das Eingabefeld eingefügt werden.','Notiz zu lang (max. 32 KB).','Dieses Projekt hat bereits 256 Notizen.','Notizen nicht verfügbar.','angezeigt','Zum Eingabefeld hinzugefügt.','Notizen'],
-    es:['Sesión','Proyecto','Huérfanas','Escribe una nota para esta conversación…','Guardado','Guardando…','No guardado. Sigue escribiendo para reintentar.','Abre una conversación para escribir su nota.','Insertar en el mensaje','Eliminar','¿Eliminar?','Aún no hay notas en este proyecto.','No hay notas huérfanas.','conversación eliminada','Sin título','Abrir la conversación','Esta nota no se puede insertar en el editor de mensajes.','Nota demasiado larga (máx. 32 KB).','Este proyecto ya tiene 256 notas.','Notas no disponibles.','mostrada','Añadida al editor de mensajes.','Notas'],
-    he:['סשן','פרויקט','יתומות','כתבו הערה לשיחה זו…','נשמר','שומר…','לא נשמר. המשיכו להקליד כדי לנסות שוב.','פתחו שיחה כדי לכתוב את ההערה שלה.','הוספה להודעה','מחיקה','למחוק?','אין עדיין הערות בפרויקט זה.','אין הערות יתומות.','השיחה נמחקה','ללא כותרת','פתיחת השיחה','לא ניתן להוסיף הערה זו לשדה הקלט.','ההערה ארוכה מדי (32KB לכל היותר).','בפרויקט זה כבר יש 256 הערות.','ההערות אינן זמינות.','מוצגת','נוספה לשדה הקלט.','הערות'],
-    ja:['セッション','プロジェクト','孤立','この会話のメモを書く…','保存済み','保存中…','保存できませんでした。入力を続けると再試行します。','会話を開くとメモを書けます。','メッセージに挿入','削除','削除しますか？','このプロジェクトにはまだメモがありません。','孤立したメモはありません。','会話は削除済み','無題','会話を開く','このメモは入力欄に挿入できません。','メモが長すぎます（最大 32 KB）。','このプロジェクトのメモはすでに 256 件あります。','メモを利用できません。','表示中','入力欄に追加しました。','メモ'],
-    ne:['सत्र','प्रोजेक्ट','अनाथ','यो कुराकानीका लागि नोट लेख्नुहोस्…','सुरक्षित गरियो','सुरक्षित गर्दै…','सुरक्षित भएन। फेरि प्रयास गर्न लेख्न जारी राख्नुहोस्।','नोट लेख्न कुनै कुराकानी खोल्नुहोस्।','सन्देशमा घुसाउनुहोस्','मेटाउनुहोस्','मेटाउने?','यस प्रोजेक्टमा अहिलेसम्म कुनै नोट छैन।','कुनै अनाथ नोट छैन।','कुराकानी मेटाइयो','शीर्षकविहीन','कुराकानी खोल्नुहोस्','यो नोट कम्पोजरमा घुसाउन सकिँदैन।','नोट धेरै लामो छ (अधिकतम 32 KB)।','यस प्रोजेक्टमा पहिले नै 256 नोट छन्।','नोटहरू उपलब्ध छैनन्।','देखाइएको','कम्पोजरमा थपियो।','नोटहरू'],
-    ru:['Сессия','Проект','Осиротевшие','Заметка к этому разговору…','Сохранено','Сохранение…','Не сохранено. Продолжайте ввод, чтобы повторить.','Откройте разговор, чтобы написать к нему заметку.','Вставить в сообщение','Удалить','Удалить?','В этом проекте пока нет заметок.','Нет осиротевших заметок.','разговор удалён','Без названия','Открыть разговор','Эту заметку нельзя вставить в поле ввода.','Заметка слишком длинная (не более 32 КБ).','В этом проекте уже 256 заметок.','Заметки недоступны.','открыт','Добавлено в поле ввода.','Заметки'],
-    tr:['Oturum','Proje','Sahipsiz','Bu konuşma için bir not yazın…','Kaydedildi','Kaydediliyor…','Kaydedilmedi. Yeniden denemek için yazmaya devam edin.','Notunu yazmak için bir konuşma açın.','İletiye ekle','Sil','Silinsin mi?','Bu projede henüz not yok.','Sahipsiz not yok.','konuşma silindi','Başlıksız','Konuşmayı aç','Bu not ileti düzenleyicisine eklenemez.','Not çok uzun (en fazla 32 KB).','Bu projede zaten 256 not var.','Notlar kullanılamıyor.','gösteriliyor','İleti düzenleyicisine eklendi.','Notlar'],
-    zh:['会话','项目','孤立','为此对话写一条笔记…','已保存','正在保存…','未保存。继续输入即可重试。','打开一个对话以编写其笔记。','插入到消息','删除','确认删除？','此项目还没有笔记。','没有孤立的笔记。','对话已删除','无标题','打开对话','无法将此笔记插入输入框。','笔记过长（最多 32 KB）。','此项目已有 256 条笔记。','笔记不可用。','当前显示','已添加到输入框。','笔记']
+    en:['Session','Project','Orphans','Write a note for this conversation…','Saved','Saving…','Not saved. Keep typing to retry.','Open a conversation to write its note.','Insert into message','Delete','Delete?','No notes in this project yet.','No orphaned notes.','conversation deleted','Untitled','Open the conversation','This note cannot be inserted into the message box.','Note too long (32 KB max).','This project already has 256 notes.','Notes unavailable.','shown','Added to the message box.','Notes','Changed in another window, so it was not deleted.','This conversation can’t be opened from here.','Too long for the message box (2 KB max).'],
+    fr:['Session','Projet','Orphelines','Écrire une note pour cette conversation…','Enregistré','Enregistrement…','Non enregistré. Continuez à écrire pour réessayer.','Ouvrez une conversation pour écrire sa note.','Insérer dans le message','Supprimer','Supprimer ?','Aucune note dans ce projet pour l’instant.','Aucune note orpheline.','conversation supprimée','Sans titre','Ouvrir la conversation','Cette note ne peut pas être insérée dans la zone de saisie.','Note trop longue (32 Ko max).','Ce projet a déjà 256 notes.','Notes indisponibles.','affichée','Ajoutée à la zone de saisie.','Notes','Modifiée dans une autre fenêtre : elle n’a pas été supprimée.','Cette conversation ne peut pas être ouverte d’ici.','Trop longue pour la zone de saisie (2 Ko max).'],
+    de:['Sitzung','Projekt','Verwaist','Notiz zu dieser Unterhaltung schreiben…','Gespeichert','Wird gespeichert…','Nicht gespeichert. Weiterschreiben, um es erneut zu versuchen.','Öffnen Sie eine Unterhaltung, um ihre Notiz zu schreiben.','In die Nachricht einfügen','Löschen','Löschen?','Noch keine Notizen in diesem Projekt.','Keine verwaisten Notizen.','Unterhaltung gelöscht','Ohne Titel','Unterhaltung öffnen','Diese Notiz kann nicht in das Eingabefeld eingefügt werden.','Notiz zu lang (max. 32 KB).','Dieses Projekt hat bereits 256 Notizen.','Notizen nicht verfügbar.','angezeigt','Zum Eingabefeld hinzugefügt.','Notizen','In einem anderen Fenster geändert, daher nicht gelöscht.','Diese Unterhaltung kann von hier aus nicht geöffnet werden.','Zu lang für das Eingabefeld (max. 2 KB).'],
+    es:['Sesión','Proyecto','Huérfanas','Escribe una nota para esta conversación…','Guardado','Guardando…','No guardado. Sigue escribiendo para reintentar.','Abre una conversación para escribir su nota.','Insertar en el mensaje','Eliminar','¿Eliminar?','Aún no hay notas en este proyecto.','No hay notas huérfanas.','conversación eliminada','Sin título','Abrir la conversación','Esta nota no se puede insertar en el editor de mensajes.','Nota demasiado larga (máx. 32 KB).','Este proyecto ya tiene 256 notas.','Notas no disponibles.','mostrada','Añadida al editor de mensajes.','Notas','Cambiada en otra ventana, así que no se eliminó.','Esta conversación no se puede abrir desde aquí.','Demasiado larga para el editor de mensajes (máx. 2 KB).'],
+    he:['סשן','פרויקט','יתומות','כתבו הערה לשיחה זו…','נשמר','שומר…','לא נשמר. המשיכו להקליד כדי לנסות שוב.','פתחו שיחה כדי לכתוב את ההערה שלה.','הוספה להודעה','מחיקה','למחוק?','אין עדיין הערות בפרויקט זה.','אין הערות יתומות.','השיחה נמחקה','ללא כותרת','פתיחת השיחה','לא ניתן להוסיף הערה זו לשדה הקלט.','ההערה ארוכה מדי (32KB לכל היותר).','בפרויקט זה כבר יש 256 הערות.','ההערות אינן זמינות.','מוצגת','נוספה לשדה הקלט.','הערות','ההערה שונתה בחלון אחר ולכן לא נמחקה.','לא ניתן לפתוח את השיחה הזו מכאן.','ארוכה מדי לשדה הקלט (2KB לכל היותר).'],
+    ja:['セッション','プロジェクト','孤立','この会話のメモを書く…','保存済み','保存中…','保存できませんでした。入力を続けると再試行します。','会話を開くとメモを書けます。','メッセージに挿入','削除','削除しますか？','このプロジェクトにはまだメモがありません。','孤立したメモはありません。','会話は削除済み','無題','会話を開く','このメモは入力欄に挿入できません。','メモが長すぎます（最大 32 KB）。','このプロジェクトのメモはすでに 256 件あります。','メモを利用できません。','表示中','入力欄に追加しました。','メモ','別のウィンドウで変更されたため、削除されませんでした。','この会話はここから開けません。','入力欄には長すぎます（最大 2 KB）。'],
+    ne:['सत्र','प्रोजेक्ट','अनाथ','यो कुराकानीका लागि नोट लेख्नुहोस्…','सुरक्षित गरियो','सुरक्षित गर्दै…','सुरक्षित भएन। फेरि प्रयास गर्न लेख्न जारी राख्नुहोस्।','नोट लेख्न कुनै कुराकानी खोल्नुहोस्।','सन्देशमा घुसाउनुहोस्','मेटाउनुहोस्','मेटाउने?','यस प्रोजेक्टमा अहिलेसम्म कुनै नोट छैन।','कुनै अनाथ नोट छैन।','कुराकानी मेटाइयो','शीर्षकविहीन','कुराकानी खोल्नुहोस्','यो नोट कम्पोजरमा घुसाउन सकिँदैन।','नोट धेरै लामो छ (अधिकतम 32 KB)।','यस प्रोजेक्टमा पहिले नै 256 नोट छन्।','नोटहरू उपलब्ध छैनन्।','देखाइएको','कम्पोजरमा थपियो।','नोटहरू','अर्को विन्डोमा परिवर्तन भएकाले मेटाइएन।','यो कुराकानी यहाँबाट खोल्न सकिँदैन।','कम्पोजरका लागि धेरै लामो (अधिकतम 2 KB)।'],
+    ru:['Сессия','Проект','Осиротевшие','Заметка к этому разговору…','Сохранено','Сохранение…','Не сохранено. Продолжайте ввод, чтобы повторить.','Откройте разговор, чтобы написать к нему заметку.','Вставить в сообщение','Удалить','Удалить?','В этом проекте пока нет заметок.','Нет осиротевших заметок.','разговор удалён','Без названия','Открыть разговор','Эту заметку нельзя вставить в поле ввода.','Заметка слишком длинная (не более 32 КБ).','В этом проекте уже 256 заметок.','Заметки недоступны.','открыт','Добавлено в поле ввода.','Заметки','Изменена в другом окне, поэтому не удалена.','Этот разговор нельзя открыть отсюда.','Слишком длинная для поля ввода (не более 2 КБ).'],
+    tr:['Oturum','Proje','Sahipsiz','Bu konuşma için bir not yazın…','Kaydedildi','Kaydediliyor…','Kaydedilmedi. Yeniden denemek için yazmaya devam edin.','Notunu yazmak için bir konuşma açın.','İletiye ekle','Sil','Silinsin mi?','Bu projede henüz not yok.','Sahipsiz not yok.','konuşma silindi','Başlıksız','Konuşmayı aç','Bu not ileti düzenleyicisine eklenemez.','Not çok uzun (en fazla 32 KB).','Bu projede zaten 256 not var.','Notlar kullanılamıyor.','gösteriliyor','İleti düzenleyicisine eklendi.','Notlar','Başka bir pencerede değiştirildiği için silinmedi.','Bu konuşma buradan açılamıyor.','İleti düzenleyicisi için çok uzun (en fazla 2 KB).'],
+    zh:['会话','项目','孤立','为此对话写一条笔记…','已保存','正在保存…','未保存。继续输入即可重试。','打开一个对话以编写其笔记。','插入到消息','删除','确认删除？','此项目还没有笔记。','没有孤立的笔记。','对话已删除','无标题','打开对话','无法将此笔记插入输入框。','笔记过长（最多 32 KB）。','此项目已有 256 条笔记。','笔记不可用。','当前显示','已添加到输入框。','笔记','已在其他窗口中修改，因此未删除。','无法从这里打开此对话。','对输入框来说过长（最多 2 KB）。']
   };
-  const VIEWS = ['session', 'project', 'orphans'];
+  const VIEWS = ['session', 'project', 'orphans'], PREFILL_BYTES = 2048;
   let words = translations.en, context, view = 'session', notes = null, listing = 0, listFailed = false;
-  // The displayed conversation's note: `saved` is what the host holds at `revision`.
-  let revision = 0, saved = '', dirty = false, timer, writes = Promise.resolve(), changed;
+  // The displayed conversation's note: `saved` is what the host holds at `revision`. `epoch` counts
+  // edits and saves: a read started before either never replaces the editor.
+  let revision = 0, saved = '', dirty = false, epoch = 0, timer, writes = Promise.resolve(), changed;
+  // Status messages are kept as keys, so a language change retranslates them.
+  const shown = {};
   const session = () => context?.sessionId || null;
-  const say = (element, index) => { $(element).textContent = index === undefined ? '' : words[index]; };
+  const say = (element, index) => { shown[element] = index; $(element).textContent = index === undefined ? '' : words[index]; };
 
   function tabs() {
     const counts = notes && { project: notes.filter(note => !note.orphan).length, orphans: notes.filter(note => note.orphan).length };
@@ -91,19 +95,22 @@ THE SOFTWARE. -->
       tab.textContent = words[index] + (counts && id !== 'session' ? ` (${counts[id]})` : '');
     });
     $('sessionView').hidden = view !== 'session'; $('listView').hidden = view === 'session';
+    $('listView').setAttribute('aria-labelledby', view === 'session' ? 'project' : view);
   }
   function select(next) { if (next === view) return; view = next; tabs(); render(); }
 
-  // Session note: saved shortly after typing stops and when the field loses focus.
+  // Session note: read-only until its first read, saved shortly after typing stops and on blur.
   async function read() {
     $('noSession').hidden = Boolean(session());
     for (const id of ['text', 'sessionBar']) $(id).hidden = !session();
     if (!session()) return;
+    const started = epoch;
     try {
       const note = await api.notes.get();
-      if (dirty) return; // typing here wins over a reread
+      if (dirty || epoch !== started) return;
       revision = note?.revision ?? 0; saved = note?.text ?? '';
       if ($('text').value !== saved) $('text').value = saved;
+      $('text').readOnly = false;
       say('saved', saved ? 4 : undefined); controls();
     } catch { say('saved', 19); }
   }
@@ -114,36 +121,57 @@ THE SOFTWARE. -->
     if (text === saved) { if ($('text').value === saved) { dirty = false; say('saved', saved ? 4 : undefined); } return; }
     try {
       let result = await api.notes.set(text, revision);
-      // Another window wrote meanwhile: the window being typed in wins, at the revision just read.
-      if (result.status === 'conflict') result = await api.notes.set(text, result.note?.revision ?? 0);
+      if (result.status === 'conflict') {
+        if (!text) {
+          // A deletion never overrides a change it did not see: show the newer note instead.
+          revision = result.note?.revision ?? 0; saved = result.note?.text ?? ''; epoch++;
+          if ($('text').value === text) { $('text').value = saved; dirty = false; }
+          say('saved', result.note ? 23 : undefined); controls(); return;
+        }
+        // Another window wrote meanwhile: the window being typed in wins, at the revision just read.
+        result = await api.notes.set(text, result.note?.revision ?? 0);
+      }
       if (result.status === 'saved') {
-        revision = result.revision; saved = text;
+        revision = result.revision; saved = text; epoch++;
         if ($('text').value === text) { dirty = false; say('saved', text ? 4 : undefined); }
       } else if (result.status === 'no-session') { $('noSession').hidden = false; }
       else say('saved', result.status === 'too-large' ? 17 : result.status === 'full' ? 18 : 6);
     } catch { say('saved', 6); }
     controls();
   }
-  $('text').oninput = () => { dirty = true; say('saved', 5); controls(); clearTimeout(timer); timer = setTimeout(save, 500); };
+  $('text').oninput = () => { dirty = true; epoch++; say('saved', 5); controls(); clearTimeout(timer); timer = setTimeout(save, 300); };
   $('text').onblur = () => { if (dirty) save(); };
   $('insert').onclick = async () => {
-    const result = await api.composer.prefill({ text: $('text').value }).catch(() => 'invalid');
-    say('saved', result === 'added' ? 21 : 16);
+    const text = $('text').value;
+    if (new TextEncoder().encode(text).length > PREFILL_BYTES) { say('saved', 25); return; }
+    const result = await api.composer.prefill({ text }).catch(() => 'invalid');
+    say('saved', result === 'added' ? 21 : result === 'too-long' ? 25 : 16);
   };
-  confirming($('trash'), () => { $('text').value = ''; dirty = true; controls(); save(); });
+  confirming($('trash'), () => { $('text').value = ''; dirty = true; epoch++; controls(); save(); });
 
-  // Project and orphan lists: every note of the project, newest first.
+  // Project and orphan lists: every note of the project, newest first. A note that moves between
+  // pages (another window saved it) restarts the scan; after three, duplicates are dropped.
   async function list() {
-    const epoch = ++listing, all = [];
+    const run = ++listing;
+    let all = [];
     try {
-      let cursor;
-      do {
-        const page = await api.notes.list(cursor);
-        if (epoch !== listing) return;
-        all.push(...page.notes); cursor = page.cursor ?? undefined;
-      } while (cursor);
+      for (let attempt = 0; attempt < 3; attempt++) {
+        const seen = new Set();
+        let cursor, repeated = false;
+        all = [];
+        do {
+          const page = await api.notes.list(cursor);
+          if (run !== listing) return;
+          for (const note of page.notes) {
+            if (seen.has(note.sessionID)) repeated = true;
+            else { seen.add(note.sessionID); all.push(note); }
+          }
+          cursor = page.cursor ?? undefined;
+        } while (cursor && !repeated);
+        if (!repeated) break;
+      }
       notes = all; listFailed = false;
-    } catch { if (epoch !== listing) return; listFailed = true; }
+    } catch { if (run !== listing) return; listFailed = true; }
     tabs(); render();
   }
   function ago(time) {
@@ -155,13 +183,16 @@ THE SOFTWARE. -->
   }
   function render() {
     if (view === 'session') return;
-    const orphans = view === 'orphans', shown = (notes ?? []).filter(note => note.orphan === orphans);
-    $('listStatus').textContent = listFailed ? words[19] : notes && !shown.length ? words[orphans ? 12 : 11] : '';
-    $('notes').replaceChildren(...shown.map(note => {
+    const orphans = view === 'orphans', visible = (notes ?? []).filter(note => note.orphan === orphans);
+    // Rows are rebuilt: keep the focused control and the expanded notes by session.
+    const active = document.activeElement?.closest?.('li'), focus = active && { id: active.dataset.session, trash: document.activeElement.classList.contains('trash') };
+    const expanded = new Set([...$('notes').querySelectorAll('[aria-expanded=true]')].map(button => button.closest('li').dataset.session));
+    say('listStatus', listFailed ? 19 : notes && !visible.length ? (orphans ? 12 : 11) : undefined);
+    $('notes').replaceChildren(...visible.map(note => {
       const row = document.createElement('li'), button = document.createElement('button'), trash = document.createElement('button');
       const title = document.createElement('span'), meta = document.createElement('span'), preview = document.createElement('span');
       const current = note.sessionID === session();
-      row.className = current ? 'current' : '';
+      row.className = current ? 'current' : ''; row.dataset.session = note.sessionID;
       button.type = 'button'; button.className = 'note';
       title.className = 'title'; title.textContent = note.title || words[14];
       meta.className = 'meta'; meta.title = new Date(note.updated).toLocaleString(context?.locale || 'en');
@@ -169,17 +200,27 @@ THE SOFTWARE. -->
       preview.className = 'preview'; preview.textContent = note.text;
       button.append(title, meta, preview);
       if (orphans) {
-        button.setAttribute('aria-expanded', 'false');
+        button.setAttribute('aria-expanded', String(expanded.has(note.sessionID)));
         button.onclick = () => button.setAttribute('aria-expanded', String(button.getAttribute('aria-expanded') !== 'true'));
       } else {
         button.title = words[15];
-        button.onclick = () => current ? select('session') : api.notes.open(note.sessionID).catch(() => {});
+        button.onclick = () => {
+          if (current) { select('session'); $('text').focus(); return; }
+          api.notes.open(note.sessionID).then(result => { if (!result?.opened) say('listStatus', 24) }, () => say('listStatus', 19));
+        };
       }
       trash.type = 'button'; trash.className = 'trash';
-      confirming(trash, () => api.notes.delete(note.sessionID, note.revision).catch(() => {}).then(() => { if (current) read(); list(); }));
+      confirming(trash, async () => {
+        const result = await api.notes.delete(note.sessionID, note.revision).catch(() => undefined);
+        if (current) read();
+        await list();
+        if (result?.status !== 'deleted') say('listStatus', result ? 23 : 19);
+      });
       row.append(button, trash);
       return row;
     }));
+    const row = focus && [...$('notes').children].find(item => item.dataset.session === focus.id);
+    if (row) row.querySelector(focus.trash ? '.trash' : '.note').focus();
   }
 
   // Delete: the first click arms the button, a second within 3 s confirms.
@@ -215,6 +256,7 @@ THE SOFTWARE. -->
     document.querySelector('[role=tablist]').setAttribute('aria-label', words[22]);
     $('text').placeholder = words[3]; $('text').setAttribute('aria-label', words[22]);
     $('insert').textContent = words[8]; $('noSession').textContent = words[7];
+    say('saved', shown.saved);
     $('trash').relabel(); tabs(); render();
     if (first) { read(); list(); }
   });
