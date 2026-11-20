@@ -23,7 +23,7 @@ THE SOFTWARE. -->
   body { margin:0; padding:12px; color:var(--ink); display:flex; flex-direction:column; gap:8px; }
   button, textarea { font:inherit; color:inherit; }
   button { border:1px solid var(--line); background:transparent; min-height:28px; padding:4px 8px; cursor:pointer; }
-  button:focus-visible, textarea:focus-visible { outline:2px solid var(--focus); outline-offset:2px; }
+  button:focus-visible, textarea:focus-visible, .preview:focus-visible { outline:2px solid var(--focus); outline-offset:2px; }
   button:disabled { opacity:.5; cursor:default; }
   [role=tablist] { display:flex; border:1px solid var(--line); flex:none; }
   [role=tab] { flex:1 1 0; min-width:0; border:0; color:var(--muted); overflow-wrap:anywhere; }
@@ -85,7 +85,8 @@ THE SOFTWARE. -->
   // edits and saves: a read started before either never replaces the editor.
   // `behind`: a reread was skipped while typing; it runs once the editor is clean again.
   // `reads` orders rereads: only the latest one may answer.
-  let revision = 0, saved = '', dirty = false, epoch = 0, behind = false, reads = 0, timer, writes = Promise.resolve(), changed;
+  // `remote` counts changes the host brought in (another window), never this window's own saves.
+  let revision = 0, saved = '', dirty = false, epoch = 0, behind = false, reads = 0, remote = 0, timer, writes = Promise.resolve(), changed;
   // Status messages are kept as keys, so a language change retranslates them.
   const shown = {};
   // The armed trash button, if any: { key, version, idle, timer }.
@@ -119,14 +120,18 @@ THE SOFTWARE. -->
       behind = false;
       revision = note?.revision ?? 0; saved = note?.text ?? '';
       const replaced = $('text').value !== saved;
-      if (replaced) $('text').value = saved;
+      if (replaced) { $('text').value = saved; remote++; }
       $('text').readOnly = false;
       // An unchanged note keeps the status shown (an insertion refusal, for instance).
       if (replaced || shown.saved === undefined || shown.saved === 19) say('saved', saved ? 4 : undefined);
       controls();
     } catch { say('saved', 19); }
   }
-  function controls() { $('insert').disabled = !$('text').value.trim(); $('trash').disabled = !$('text').value && !revision; }
+  function controls() {
+    $('insert').disabled = !$('text').value.trim(); $('trash').disabled = !$('text').value && !revision;
+    // An empty editor follows the panel's direction; typed text, its own.
+    $('text').dir = $('text').value ? 'auto' : document.documentElement.dir;
+  }
   function save() { clearTimeout(timer); writes = writes.then(write); return writes; }
   async function write() {
     const text = $('text').value;
@@ -136,12 +141,13 @@ THE SOFTWARE. -->
       if (result.status === 'conflict') {
         if (!text) {
           // A deletion never overrides a change it did not see: show the newer note instead.
-          revision = result.note?.revision ?? 0; saved = result.note?.text ?? ''; epoch++;
+          revision = result.note?.revision ?? 0; saved = result.note?.text ?? ''; epoch++; remote++;
           if ($('text').value === text) { $('text').value = saved; dirty = false; }
           say('saved', result.note ? 23 : undefined); controls(); return;
         }
         // Another window wrote meanwhile: the window being typed in wins, at the revision just read
         // (three tries; a busier note keeps the text here for the next save).
+        remote++;
         for (let tries = 0; result.status === 'conflict' && tries < 3; tries++) result = await api.notes.set(text, result.note?.revision ?? 0);
         if (result.status === 'conflict') revision = result.note?.revision ?? 0;
       }
@@ -164,9 +170,9 @@ THE SOFTWARE. -->
     const result = await api.composer.prefill({ text }).catch(() => 'invalid');
     say('saved', result === 'added' ? 21 : result === 'too-long' ? 25 : 16);
   };
-  // Confirmation holds only for the revision the user armed against.
+  // Confirmation holds only while no other window changed the note since it was armed.
   confirming($('trash'), () => { $('text').value = ''; dirty = true; epoch++; controls(); $('text').focus(); save(); },
-    { version: () => revision, key: 'session', stale: () => say('saved', 23) });
+    { version: () => remote, key: 'session', stale: () => say('saved', 23) });
 
   // Project and orphan lists: every note of the project, newest first. A note that moves between
   // pages (another window saved it) restarts the scan; after three, duplicates are dropped.
@@ -206,7 +212,7 @@ THE SOFTWARE. -->
     // Rows are rebuilt: keep the focused control and the expanded notes by session.
     const rows = [...$('notes').children], active = document.activeElement?.closest?.('li')
     const focus = active && { id: active.dataset.session, trash: document.activeElement.classList.contains('trash'), index: rows.indexOf(active) };
-    const expanded = new Set(rows.filter(row => row.querySelector('[aria-expanded=true]')).map(row => row.dataset.session));
+    const expanded = new Set(rows.filter(row => row.querySelector('.preview[data-expanded]')).map(row => row.dataset.session));
     say('listStatus', listFailed ? 19 : notes && !visible.length ? (orphans ? 12 : 11) : undefined);
     $('notes').replaceChildren(...visible.map(note => {
       const row = document.createElement('li'), item = document.createElement('div'), button = document.createElement('button'), trash = document.createElement('button');
@@ -220,17 +226,24 @@ THE SOFTWARE. -->
       meta.textContent = [ago(note.updated), orphans ? words[13] : current ? words[20] : ''].filter(Boolean).join(' · ');
       // The note's text is its own region: the button carries only the title and date.
       preview.className = 'preview'; preview.dir = 'auto'; preview.textContent = note.text;
-      preview.id = `preview-${note.sessionID.replace(/[^\w-]/g, '_')}`; preview.onclick = () => button.click();
+      preview.id = `preview-${note.sessionID.replace(/[^\w-]/g, '_')}`;
       button.append(title, meta); item.className = 'item'; item.append(button, preview);
+      // Any note unfolds from its text (click, or Enter once focused); selecting text never acts.
+      const show = open => { if (open) preview.dataset.expanded = ''; else delete preview.dataset.expanded; if (orphans) button.setAttribute('aria-expanded', String(open)); };
+      const toggle = () => show(!('expanded' in preview.dataset));
+      preview.tabIndex = 0; show(expanded.has(note.sessionID));
+      preview.onclick = () => { if (!getSelection()?.toString()) toggle(); };
+      preview.onkeydown = event => { if (event.key === 'Enter' && !event.repeat) { event.preventDefault(); toggle(); } };
       if (orphans) {
-        const show = open => { button.setAttribute('aria-expanded', String(open)); if (open) preview.dataset.expanded = ''; else delete preview.dataset.expanded; };
-        button.setAttribute('aria-controls', preview.id); show(expanded.has(note.sessionID));
-        button.onclick = () => show(button.getAttribute('aria-expanded') !== 'true');
+        button.setAttribute('aria-controls', preview.id);
+        button.onclick = toggle;
       } else {
         button.title = words[15];
+        // The host shows the conversation, the displayed one included (out of a file preview, say).
         button.onclick = () => {
-          if (current) { select('session'); $('text').focus(); return; }
-          api.notes.open(note.sessionID).then(result => { if (!result?.opened) say('listStatus', 24) }, () => say('listStatus', 19));
+          // A conversation that cannot be opened from here still shows its whole note.
+          api.notes.open(note.sessionID).then(result => { if (!result?.opened) { say('listStatus', 24); show(true); } }, () => say('listStatus', 19));
+          if (current) { select('session'); $('text').focus(); }
         };
       }
       trash.type = 'button'; trash.className = 'trash';
@@ -245,7 +258,7 @@ THE SOFTWARE. -->
           const rows = $('notes').children;
           (rows[Math.min(index, rows.length - 1)]?.querySelector('.note') ?? $(view)).focus();
         }
-      }, { version: () => note.revision, key: `row:${note.sessionID}`, label: note.title || words[14], stale: () => { say('listStatus', 23); list(); } });
+      }, { version: () => note.revision, key: `row:${note.sessionID}`, label: note.title || words[14], stale: async () => { await list(); say('listStatus', 23); } });
       row.append(item, trash);
       return row;
     }));
@@ -265,6 +278,8 @@ THE SOFTWARE. -->
     const name = text => label ? `${text} — ${label}` : text;
     const idle = () => { delete button.dataset.armed; button.innerHTML = ICON; button.setAttribute('aria-label', name(words[9])); button.title = name(words[9]); };
     const arm = () => { button.dataset.armed = '1'; button.textContent = words[10]; button.setAttribute('aria-label', name(words[10])); };
+    // A held key repeats: only distinct presses arm and confirm.
+    button.onkeydown = event => { if (event.repeat && (event.key === 'Enter' || event.key === ' ')) event.preventDefault(); };
     button.onclick = () => {
       if (armed?.key === key) { const current = armed.version === version(); disarm(); if (current) run(); else stale(); return; }
       disarm();
@@ -277,10 +292,10 @@ THE SOFTWARE. -->
 
   VIEWS.forEach(id => { $(id).onclick = () => select(id); });
   document.querySelector('[role=tablist]').onkeydown = event => {
-    const step = { ArrowRight: 1, ArrowLeft: -1 }[event.key];
-    if (!step) return;
+    const step = { ArrowRight: 1, ArrowLeft: -1 }[event.key], edge = { Home: VIEWS[0], End: VIEWS[2] }[event.key];
+    if (!step && !edge) return;
     event.preventDefault();
-    const rtl = document.documentElement.dir === 'rtl', next = VIEWS[(VIEWS.indexOf(view) + (rtl ? -step : step) + 3) % 3];
+    const rtl = document.documentElement.dir === 'rtl', next = edge ?? VIEWS[(VIEWS.indexOf(view) + (rtl ? -step : step) + 3) % 3];
     select(next); $(next).focus();
   };
   // Another window, a deleted conversation or a reconnect: read both again.
@@ -298,7 +313,7 @@ THE SOFTWARE. -->
     $('text').placeholder = words[3]; $('text').setAttribute('aria-label', words[22]);
     $('insert').textContent = words[8]; $('noSession').textContent = words[7];
     say('saved', shown.saved);
-    $('trash').relabel(); tabs(); render();
+    $('trash').relabel(); controls(); tabs(); render();
     if (first) { read(); list(); }
   });
 })();

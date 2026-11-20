@@ -110,6 +110,12 @@ try {
   await view.waitForTimeout(400)
   assert.equal(await orphan.getAttribute('aria-expanded'), 'true')
   assert.equal(await orphan.evaluate(element => document.activeElement === element), true)
+  // A held Enter arms once and never confirms.
+  await frame.locator('li[data-session="ses_old"] .trash').focus()
+  await view.keyboard.down('Enter'); await view.keyboard.down('Enter'); await view.keyboard.down('Enter'); await view.keyboard.up('Enter')
+  await view.waitForTimeout(300)
+  assert.deepEqual(await calls(view, 'delete'), [], 'a repeated key never deletes')
+  await view.waitForTimeout(3200)
   await frame.getByRole('button', { name: 'Supprimer' }).click()
   assert.deepEqual(await calls(view, 'delete'), [], 'the first click only arms')
   await frame.getByRole('button', { name: 'Supprimer ?' }).click()

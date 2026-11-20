@@ -11,10 +11,11 @@ API 4 `panel.notes` permission; other hosts list it as incompatible.
   at most 2 KB and can refuse other text too (an unmatched `{{1}}` marker, for
   instance); the panel says when nothing was added and never sends a message.
 - **Project**: every note of the project's conversations, newest first, with the
-  conversation's title. Selecting a note opens its conversation; a conversation
-  this window cannot open says so.
+  conversation's title. Selecting a title opens its conversation; a conversation
+  this window cannot open says so and unfolds the note. Selecting a note's text
+  unfolds it.
 - **Orphans**: notes whose conversation was deleted, with the conversation's title
-  as it was when the note was last saved. Selecting one shows its full text.
+  as it was when the note was last saved. Selecting one unfolds its full text.
 - Each note has a trash button: a first click arms it, a second within three
   seconds deletes the note. Emptying the Session note deletes it too. A deletion
   that meets a change made in another window keeps that change and says so.
