@@ -18,7 +18,8 @@
    conversation's message box, never sent), `images.conversation` (open or start
    the project's Images conversation), `opencode.designAgent` (CodeNomad provides
    its Design agent to OpenCode while the addon is enabled) and
-   `panel.preferences` (one small JSON object per installed addon), each at most
+   `panel.preferences` (one small JSON object per installed addon) and
+   `panel.notes` (one plain-text note per conversation, listed per project), each at most
    once, in any order. Declare only the capabilities the panel uses; each one has
    its own install sentence. API 4 addons install only on a CodeNomad host
    supporting extension API 4; other hosts list them as incompatible.

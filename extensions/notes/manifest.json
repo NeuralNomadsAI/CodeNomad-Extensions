@@ -1,0 +1,10 @@
+{
+  "id": "neuralnomads.notes",
+  "name": "Notes",
+  "version": "1.0.0",
+  "apiVersion": 4,
+  "author": "NeuralNomadsAI",
+  "license": "MIT",
+  "repository": "https://github.com/NeuralNomadsAI/CodeNomad-Extensions",
+  "permissions": ["session.context", "panel.notes", "composer.prefill"]
+}

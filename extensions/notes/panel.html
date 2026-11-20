@@ -1,0 +1,222 @@
+<!-- MIT License — Copyright (c) 2026 NeuralNomadsAI
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+The above copyright notice and this permission notice shall be included in
+all copies or substantial portions of the Software.
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
+THE SOFTWARE. -->
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<style>
+  :root { color-scheme: light; --bg:#f7f8fa; --tile:#edf0f4; --ink:#232a36; --muted:#626e80; --line:#cdd4df; --focus:#336cb7; --danger:#b3261e; font:13px system-ui,sans-serif; }
+  :root[data-appearance=dark] { color-scheme:dark; --bg:#1d2430; --tile:#252f3d; --ink:#e0e7f1; --muted:#a1aec0; --line:#3b485c; --focus:#83b6ef; --danger:#f2b8b5; }
+  * { box-sizing:border-box; border-radius:0; }
+  html, body { height:100%; background:var(--bg); }
+  body { margin:0; padding:12px; color:var(--ink); display:flex; flex-direction:column; gap:8px; }
+  button, textarea { font:inherit; color:inherit; }
+  button { border:1px solid var(--line); background:transparent; min-height:28px; padding:4px 8px; cursor:pointer; }
+  button:focus-visible, textarea:focus-visible { outline:2px solid var(--focus); outline-offset:2px; }
+  button:disabled { opacity:.5; cursor:default; }
+  [role=tablist] { display:flex; border:1px solid var(--line); flex:none; }
+  [role=tab] { flex:1; border:0; color:var(--muted); }
+  [role=tab] + [role=tab] { border-inline-start:1px solid var(--line); }
+  [role=tab][aria-selected=true] { background:var(--tile); color:var(--ink); font-weight:600; }
+  [role=tabpanel] { flex:1; min-height:0; display:flex; flex-direction:column; gap:8px; }
+  [hidden] { display:none !important; }
+  textarea { flex:1; min-height:120px; width:100%; resize:none; padding:8px; border:1px solid var(--line); background:transparent; line-height:1.5; }
+  .bar { display:flex; align-items:center; gap:8px; flex:none; }
+  .status { flex:1; min-width:0; color:var(--muted); font-size:12px; }
+  p.status { flex:none; margin:0; line-height:1.5; }
+  .trash { display:inline-flex; align-items:center; justify-content:center; min-width:28px; padding:4px; color:var(--muted); }
+  .trash svg { width:16px; height:16px; }
+  .trash:hover { color:var(--danger); }
+  .trash[data-armed] { color:var(--danger); border-color:var(--danger); padding:4px 8px; font-weight:600; }
+  ul { list-style:none; margin:0; padding:0; overflow:auto; }
+  li { display:flex; align-items:flex-start; gap:4px; border-inline-start:2px solid transparent; }
+  li + li { border-top:1px solid var(--line); }
+  li.current { border-inline-start-color:var(--focus); }
+  .note { flex:1; min-width:0; display:block; padding:8px 4px; border:0; text-align:start; }
+  .note:hover { background:var(--tile); }
+  li .trash { margin-top:6px; }
+  .title { display:block; font-weight:600; overflow-wrap:anywhere; }
+  .meta { display:block; margin-top:2px; color:var(--muted); font-size:11px; }
+  .preview { display:-webkit-box; -webkit-line-clamp:3; -webkit-box-orient:vertical; overflow:hidden; margin-top:4px; white-space:pre-wrap; overflow-wrap:anywhere; }
+  [aria-expanded=true] .preview { display:block; }
+</style>
+<div role="tablist"><button role="tab" id="session" aria-controls="sessionView"></button><button role="tab" id="project" aria-controls="listView"></button><button role="tab" id="orphans" aria-controls="listView"></button></div>
+<section id="sessionView" role="tabpanel">
+  <p id="noSession" class="status" hidden></p>
+  <textarea id="text" spellcheck="true"></textarea>
+  <div class="bar" id="sessionBar"><span id="saved" class="status" role="status"></span><button id="insert" type="button"></button><button id="trash" class="trash" type="button"></button></div>
+</section>
+<section id="listView" role="tabpanel" hidden><p id="listStatus" class="status" role="status"></p><ul id="notes"></ul></section>
+<script>
+(() => {
+  const $ = id => document.getElementById(id), api = window.codenomad;
+  const ICON = '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" aria-hidden="true"><path d="M2.5 4h11M6 4V2.5h4V4M4 4l.7 9.5h6.6L12 4M6.8 6.5v5M9.2 6.5v5"/></svg>';
+  // Session, Project, Orphans, placeholder, Saved, Saving, not saved, no conversation, Insert, Delete, Delete?, no notes, no orphans,
+  // conversation deleted, Untitled, Open the conversation, cannot insert, too long, full, unavailable, shown, added, Notes
+  const translations = {
+    en:['Session','Project','Orphans','Write a note for this conversation…','Saved','Saving…','Not saved. Keep typing to retry.','Open a conversation to write its note.','Insert into message','Delete','Delete?','No notes in this project yet.','No orphaned notes.','conversation deleted','Untitled','Open the conversation','This note cannot be inserted into the message box.','Note too long (32 KB max).','This project already has 256 notes.','Notes unavailable.','shown','Added to the message box.','Notes'],
+    fr:['Session','Projet','Orphelines','Écrire une note pour cette conversation…','Enregistré','Enregistrement…','Non enregistré. Continuez à écrire pour réessayer.','Ouvrez une conversation pour écrire sa note.','Insérer dans le message','Supprimer','Supprimer ?','Aucune note dans ce projet pour l’instant.','Aucune note orpheline.','conversation supprimée','Sans titre','Ouvrir la conversation','Cette note ne peut pas être insérée dans la zone de saisie.','Note trop longue (32 Ko max).','Ce projet a déjà 256 notes.','Notes indisponibles.','affichée','Ajoutée à la zone de saisie.','Notes'],
+    de:['Sitzung','Projekt','Verwaist','Notiz zu dieser Unterhaltung schreiben…','Gespeichert','Wird gespeichert…','Nicht gespeichert. Weiterschreiben, um es erneut zu versuchen.','Öffnen Sie eine Unterhaltung, um ihre Notiz zu schreiben.','In die Nachricht einfügen','Löschen','Löschen?','Noch keine Notizen in diesem Projekt.','Keine verwaisten Notizen.','Unterhaltung gelöscht','Ohne Titel','Unterhaltung öffnen','Diese Notiz kann nicht in das Eingabefeld eingefügt werden.','Notiz zu lang (max. 32 KB).','Dieses Projekt hat bereits 256 Notizen.','Notizen nicht verfügbar.','angezeigt','Zum Eingabefeld hinzugefügt.','Notizen'],
+    es:['Sesión','Proyecto','Huérfanas','Escribe una nota para esta conversación…','Guardado','Guardando…','No guardado. Sigue escribiendo para reintentar.','Abre una conversación para escribir su nota.','Insertar en el mensaje','Eliminar','¿Eliminar?','Aún no hay notas en este proyecto.','No hay notas huérfanas.','conversación eliminada','Sin título','Abrir la conversación','Esta nota no se puede insertar en el editor de mensajes.','Nota demasiado larga (máx. 32 KB).','Este proyecto ya tiene 256 notas.','Notas no disponibles.','mostrada','Añadida al editor de mensajes.','Notas'],
+    he:['סשן','פרויקט','יתומות','כתבו הערה לשיחה זו…','נשמר','שומר…','לא נשמר. המשיכו להקליד כדי לנסות שוב.','פתחו שיחה כדי לכתוב את ההערה שלה.','הוספה להודעה','מחיקה','למחוק?','אין עדיין הערות בפרויקט זה.','אין הערות יתומות.','השיחה נמחקה','ללא כותרת','פתיחת השיחה','לא ניתן להוסיף הערה זו לשדה הקלט.','ההערה ארוכה מדי (32KB לכל היותר).','בפרויקט זה כבר יש 256 הערות.','ההערות אינן זמינות.','מוצגת','נוספה לשדה הקלט.','הערות'],
+    ja:['セッション','プロジェクト','孤立','この会話のメモを書く…','保存済み','保存中…','保存できませんでした。入力を続けると再試行します。','会話を開くとメモを書けます。','メッセージに挿入','削除','削除しますか？','このプロジェクトにはまだメモがありません。','孤立したメモはありません。','会話は削除済み','無題','会話を開く','このメモは入力欄に挿入できません。','メモが長すぎます（最大 32 KB）。','このプロジェクトのメモはすでに 256 件あります。','メモを利用できません。','表示中','入力欄に追加しました。','メモ'],
+    ne:['सत्र','प्रोजेक्ट','अनाथ','यो कुराकानीका लागि नोट लेख्नुहोस्…','सुरक्षित गरियो','सुरक्षित गर्दै…','सुरक्षित भएन। फेरि प्रयास गर्न लेख्न जारी राख्नुहोस्।','नोट लेख्न कुनै कुराकानी खोल्नुहोस्।','सन्देशमा घुसाउनुहोस्','मेटाउनुहोस्','मेटाउने?','यस प्रोजेक्टमा अहिलेसम्म कुनै नोट छैन।','कुनै अनाथ नोट छैन।','कुराकानी मेटाइयो','शीर्षकविहीन','कुराकानी खोल्नुहोस्','यो नोट कम्पोजरमा घुसाउन सकिँदैन।','नोट धेरै लामो छ (अधिकतम 32 KB)।','यस प्रोजेक्टमा पहिले नै 256 नोट छन्।','नोटहरू उपलब्ध छैनन्।','देखाइएको','कम्पोजरमा थपियो।','नोटहरू'],
+    ru:['Сессия','Проект','Осиротевшие','Заметка к этому разговору…','Сохранено','Сохранение…','Не сохранено. Продолжайте ввод, чтобы повторить.','Откройте разговор, чтобы написать к нему заметку.','Вставить в сообщение','Удалить','Удалить?','В этом проекте пока нет заметок.','Нет осиротевших заметок.','разговор удалён','Без названия','Открыть разговор','Эту заметку нельзя вставить в поле ввода.','Заметка слишком длинная (не более 32 КБ).','В этом проекте уже 256 заметок.','Заметки недоступны.','открыт','Добавлено в поле ввода.','Заметки'],
+    tr:['Oturum','Proje','Sahipsiz','Bu konuşma için bir not yazın…','Kaydedildi','Kaydediliyor…','Kaydedilmedi. Yeniden denemek için yazmaya devam edin.','Notunu yazmak için bir konuşma açın.','İletiye ekle','Sil','Silinsin mi?','Bu projede henüz not yok.','Sahipsiz not yok.','konuşma silindi','Başlıksız','Konuşmayı aç','Bu not ileti düzenleyicisine eklenemez.','Not çok uzun (en fazla 32 KB).','Bu projede zaten 256 not var.','Notlar kullanılamıyor.','gösteriliyor','İleti düzenleyicisine eklendi.','Notlar'],
+    zh:['会话','项目','孤立','为此对话写一条笔记…','已保存','正在保存…','未保存。继续输入即可重试。','打开一个对话以编写其笔记。','插入到消息','删除','确认删除？','此项目还没有笔记。','没有孤立的笔记。','对话已删除','无标题','打开对话','无法将此笔记插入输入框。','笔记过长（最多 32 KB）。','此项目已有 256 条笔记。','笔记不可用。','当前显示','已添加到输入框。','笔记']
+  };
+  const VIEWS = ['session', 'project', 'orphans'];
+  let words = translations.en, context, view = 'session', notes = null, listing = 0, listFailed = false;
+  // The displayed conversation's note: `saved` is what the host holds at `revision`.
+  let revision = 0, saved = '', dirty = false, timer, writes = Promise.resolve(), changed;
+  const session = () => context?.sessionId || null;
+  const say = (element, index) => { $(element).textContent = index === undefined ? '' : words[index]; };
+
+  function tabs() {
+    const counts = notes && { project: notes.filter(note => !note.orphan).length, orphans: notes.filter(note => note.orphan).length };
+    VIEWS.forEach((id, index) => {
+      const tab = $(id);
+      tab.setAttribute('aria-selected', String(id === view)); tab.tabIndex = id === view ? 0 : -1;
+      tab.textContent = words[index] + (counts && id !== 'session' ? ` (${counts[id]})` : '');
+    });
+    $('sessionView').hidden = view !== 'session'; $('listView').hidden = view === 'session';
+  }
+  function select(next) { if (next === view) return; view = next; tabs(); render(); }
+
+  // Session note: saved shortly after typing stops and when the field loses focus.
+  async function read() {
+    $('noSession').hidden = Boolean(session());
+    for (const id of ['text', 'sessionBar']) $(id).hidden = !session();
+    if (!session()) return;
+    try {
+      const note = await api.notes.get();
+      if (dirty) return; // typing here wins over a reread
+      revision = note?.revision ?? 0; saved = note?.text ?? '';
+      if ($('text').value !== saved) $('text').value = saved;
+      say('saved', saved ? 4 : undefined); controls();
+    } catch { say('saved', 19); }
+  }
+  function controls() { $('insert').disabled = !$('text').value.trim(); $('trash').disabled = !$('text').value && !revision; }
+  function save() { clearTimeout(timer); writes = writes.then(write); return writes; }
+  async function write() {
+    const text = $('text').value;
+    if (text === saved) { if ($('text').value === saved) { dirty = false; say('saved', saved ? 4 : undefined); } return; }
+    try {
+      let result = await api.notes.set(text, revision);
+      // Another window wrote meanwhile: the window being typed in wins, at the revision just read.
+      if (result.status === 'conflict') result = await api.notes.set(text, result.note?.revision ?? 0);
+      if (result.status === 'saved') {
+        revision = result.revision; saved = text;
+        if ($('text').value === text) { dirty = false; say('saved', text ? 4 : undefined); }
+      } else if (result.status === 'no-session') { $('noSession').hidden = false; }
+      else say('saved', result.status === 'too-large' ? 17 : result.status === 'full' ? 18 : 6);
+    } catch { say('saved', 6); }
+    controls();
+  }
+  $('text').oninput = () => { dirty = true; say('saved', 5); controls(); clearTimeout(timer); timer = setTimeout(save, 500); };
+  $('text').onblur = () => { if (dirty) save(); };
+  $('insert').onclick = async () => {
+    const result = await api.composer.prefill({ text: $('text').value }).catch(() => 'invalid');
+    say('saved', result === 'added' ? 21 : 16);
+  };
+  confirming($('trash'), () => { $('text').value = ''; dirty = true; controls(); save(); });
+
+  // Project and orphan lists: every note of the project, newest first.
+  async function list() {
+    const epoch = ++listing, all = [];
+    try {
+      let cursor;
+      do {
+        const page = await api.notes.list(cursor);
+        if (epoch !== listing) return;
+        all.push(...page.notes); cursor = page.cursor ?? undefined;
+      } while (cursor);
+      notes = all; listFailed = false;
+    } catch { if (epoch !== listing) return; listFailed = true; }
+    tabs(); render();
+  }
+  function ago(time) {
+    const format = new Intl.RelativeTimeFormat(context?.locale || 'en', { numeric: 'auto' }), seconds = (time - Date.now()) / 1000;
+    for (const [unit, size] of [['year', 31536000], ['month', 2592000], ['week', 604800], ['day', 86400], ['hour', 3600], ['minute', 60]]) {
+      if (Math.abs(seconds) >= size) return format.format(Math.round(seconds / size), unit);
+    }
+    return format.format(0, 'second');
+  }
+  function render() {
+    if (view === 'session') return;
+    const orphans = view === 'orphans', shown = (notes ?? []).filter(note => note.orphan === orphans);
+    $('listStatus').textContent = listFailed ? words[19] : notes && !shown.length ? words[orphans ? 12 : 11] : '';
+    $('notes').replaceChildren(...shown.map(note => {
+      const row = document.createElement('li'), button = document.createElement('button'), trash = document.createElement('button');
+      const title = document.createElement('span'), meta = document.createElement('span'), preview = document.createElement('span');
+      const current = note.sessionID === session();
+      row.className = current ? 'current' : '';
+      button.type = 'button'; button.className = 'note';
+      title.className = 'title'; title.textContent = note.title || words[14];
+      meta.className = 'meta'; meta.title = new Date(note.updated).toLocaleString(context?.locale || 'en');
+      meta.textContent = [ago(note.updated), orphans ? words[13] : current ? words[20] : ''].filter(Boolean).join(' · ');
+      preview.className = 'preview'; preview.textContent = note.text;
+      button.append(title, meta, preview);
+      if (orphans) {
+        button.setAttribute('aria-expanded', 'false');
+        button.onclick = () => button.setAttribute('aria-expanded', String(button.getAttribute('aria-expanded') !== 'true'));
+      } else {
+        button.title = words[15];
+        button.onclick = () => current ? select('session') : api.notes.open(note.sessionID).catch(() => {});
+      }
+      trash.type = 'button'; trash.className = 'trash';
+      confirming(trash, () => api.notes.delete(note.sessionID, note.revision).catch(() => {}).then(() => { if (current) read(); list(); }));
+      row.append(button, trash);
+      return row;
+    }));
+  }
+
+  // Delete: the first click arms the button, a second within 3 s confirms.
+  function confirming(button, run) {
+    const reset = () => { delete button.dataset.armed; button.innerHTML = ICON; button.setAttribute('aria-label', words[9]); button.title = words[9]; };
+    reset();
+    button.onclick = () => {
+      if (button.dataset.armed) { clearTimeout(button.timer); reset(); run(); return; }
+      button.dataset.armed = '1'; button.textContent = words[10]; button.setAttribute('aria-label', words[10]);
+      button.timer = setTimeout(reset, 3000);
+    };
+    button.relabel = reset;
+  }
+
+  VIEWS.forEach(id => { $(id).onclick = () => select(id); });
+  document.querySelector('[role=tablist]').onkeydown = event => {
+    const step = { ArrowRight: 1, ArrowLeft: -1 }[event.key];
+    if (!step) return;
+    event.preventDefault();
+    const rtl = document.documentElement.dir === 'rtl', next = VIEWS[(VIEWS.indexOf(view) + (rtl ? -step : step) + 3) % 3];
+    select(next); $(next).focus();
+  };
+  // Another window, a deleted conversation or a reconnect: read both again.
+  api.notes.onChanged(() => { clearTimeout(changed); changed = setTimeout(() => { if (!dirty) read(); list(); }, 150); });
+  api.onContext(value => {
+    const first = !context; context = value;
+    words = translations[value.locale.split('-')[0]] || translations.en;
+    document.documentElement.lang = value.locale; document.documentElement.dir = value.locale.startsWith('he') ? 'rtl' : 'ltr';
+    document.documentElement.dataset.appearance = value.appearance;
+    for (const [variable, key] of Object.entries({ '--bg':'background', '--tile':'surface', '--ink':'text', '--muted':'muted', '--line':'border', '--focus':'focus' })) {
+      const color = value.colors?.[key]; if (color && CSS.supports('color', color)) document.documentElement.style.setProperty(variable, color);
+    }
+    document.querySelector('[role=tablist]').setAttribute('aria-label', words[22]);
+    $('text').placeholder = words[3]; $('text').setAttribute('aria-label', words[22]);
+    $('insert').textContent = words[8]; $('noSession').textContent = words[7];
+    $('trash').relabel(); tabs(); render();
+    if (first) { read(); list(); }
+  });
+})();
+</script>
