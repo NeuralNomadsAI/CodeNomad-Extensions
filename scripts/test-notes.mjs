@@ -22,7 +22,7 @@ const server = createServer((_request, response) => {
     window.calls = []; window.openable = true;
     // The first read waits until the test releases it.
     window.getGate = new Promise(resolve => { window.releaseGet = resolve });
-    let channel, context = { apiVersion: 4, sessionId: displayed, locale: 'fr-FR', appearance: 'dark', colors: { background: '#343a43', surface: '#252a31' } };
+    let channel, context = { apiVersion: 4, sessionId: new URLSearchParams(location.search).get('session') ?? displayed, locale: 'fr-FR', appearance: 'dark', colors: { background: '#343a43', surface: '#252a31' } };
     const changed = () => setTimeout(() => channel.postMessage({ type: 'notes:changed' }), 20);
     async function answer(capability, method, input) {
       window.calls.push({ capability, method, input });
@@ -136,13 +136,14 @@ try {
   await view.waitForTimeout(500)
   assert.equal((await calls(view, 'set')).filter(input => input.text === '').length, deletions, 'never deletes a revision it did not show when armed')
   assert.equal(await editor.inputValue(), 'Remplacée')
+  assert.equal(await frame.locator('#saved').textContent(), 'Modifiée dans une autre fenêtre : elle n’a pas été supprimée.')
 
   // A deletion that meets another window's change keeps and shows it.
   await frame.getByRole('button', { name: 'Supprimer' }).click()
   await view.evaluate(() => { const note = window.notes.get('ses_a'); window.notes.set('ses_a', { ...note, text: 'Ailleurs', revision: 5000 }) })
   await frame.getByRole('button', { name: 'Supprimer ?' }).click()
-  await frame.getByText('Modifiée dans une autre fenêtre : elle n’a pas été supprimée.').waitFor()
-  assert.equal(await editor.inputValue(), 'Ailleurs')
+  await frame.locator('#text').evaluate(element => new Promise(resolve => { const check = () => element.value === 'Ailleurs' ? resolve() : requestAnimationFrame(check); check() }))
+  assert.equal(await frame.locator('#saved').textContent(), 'Modifiée dans une autre fenêtre : elle n’a pas été supprimée.')
 
   // Clearing the session note deletes it on the host.
   await frame.getByRole('button', { name: 'Supprimer' }).click()
@@ -150,6 +151,14 @@ try {
   await frame.getByRole('tab', { name: 'Projet (1)' }).waitFor()
   assert.equal(await editor.inputValue(), '')
   assert.equal(await view.evaluate(() => window.notes.has('ses_a')), false)
+  // The host's info view is no conversation: no editor, the lists stay available.
+  const info = await browser.newPage({ viewport: { width: 380, height: 640 } })
+  await info.goto(`http://127.0.0.1:${server.address().port}/?session=info`)
+  const infoFrame = info.frameLocator('iframe')
+  await infoFrame.getByText('Ouvrez une conversation pour écrire sa note.').waitFor()
+  assert.equal(await infoFrame.getByRole('textbox', { name: 'Notes' }).count(), 0)
+  await infoFrame.getByRole('tab', { name: /^Projet/ }).click()
+  await infoFrame.locator('.note').first().waitFor()
   console.log('Notes addon checks passed')
 } finally {
   await browser.close()

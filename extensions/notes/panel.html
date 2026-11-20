@@ -85,7 +85,10 @@ THE SOFTWARE. -->
   let revision = 0, saved = '', dirty = false, epoch = 0, behind = false, timer, writes = Promise.resolve(), changed;
   // Status messages are kept as keys, so a language change retranslates them.
   const shown = {};
-  const session = () => context?.sessionId || null;
+  // The armed trash button, if any: { key, version, idle, timer }.
+  let armed = null;
+  // The host's info view is no conversation.
+  const session = () => context?.sessionId && context.sessionId !== 'info' ? context.sessionId : null;
   const say = (element, index) => { shown[element] = index; $(element).textContent = index === undefined ? '' : words[index]; };
 
   function tabs() {
@@ -111,9 +114,12 @@ THE SOFTWARE. -->
       if (dirty || epoch !== started) { behind = true; return; }
       behind = false;
       revision = note?.revision ?? 0; saved = note?.text ?? '';
-      if ($('text').value !== saved) $('text').value = saved;
+      const replaced = $('text').value !== saved;
+      if (replaced) $('text').value = saved;
       $('text').readOnly = false;
-      say('saved', saved ? 4 : undefined); controls();
+      // An unchanged note keeps the status shown (an insertion refusal, for instance).
+      if (replaced || shown.saved === undefined || shown.saved === 19) say('saved', saved ? 4 : undefined);
+      controls();
     } catch { say('saved', 19); }
   }
   function controls() { $('insert').disabled = !$('text').value.trim(); $('trash').disabled = !$('text').value && !revision; }
@@ -130,14 +136,17 @@ THE SOFTWARE. -->
           if ($('text').value === text) { $('text').value = saved; dirty = false; }
           say('saved', result.note ? 23 : undefined); controls(); return;
         }
-        // Another window wrote meanwhile: the window being typed in wins, at the revision just read.
-        result = await api.notes.set(text, result.note?.revision ?? 0);
+        // Another window wrote meanwhile: the window being typed in wins, at the revision just read
+        // (three tries; a busier note keeps the text here for the next save).
+        for (let tries = 0; result.status === 'conflict' && tries < 3; tries++) result = await api.notes.set(text, result.note?.revision ?? 0);
+        if (result.status === 'conflict') revision = result.note?.revision ?? 0;
       }
       if (result.status === 'saved') {
         revision = result.revision; saved = text; epoch++;
-        if ($('text').value === text) { dirty = false; say('saved', text ? 4 : undefined); behind = false; }
+        if ($('text').value === text) { dirty = false; say('saved', text ? 4 : undefined); if (behind) read(); }
       } else if (result.status === 'no-session') { $('noSession').hidden = false; }
       else say('saved', result.status === 'too-large' ? 17 : result.status === 'full' ? 18 : 6);
+      if (result.status === 'conflict') { epoch++; dirty = true; }
     } catch { say('saved', 6); }
     controls();
   }
@@ -146,11 +155,14 @@ THE SOFTWARE. -->
   $('insert').onclick = async () => {
     const text = $('text').value;
     if (new TextEncoder().encode(text).length > PREFILL_BYTES) { say('saved', 25); return; }
+    // On a phone the host closes the panel after inserting: the note is saved first.
+    if (dirty) await save();
     const result = await api.composer.prefill({ text }).catch(() => 'invalid');
     say('saved', result === 'added' ? 21 : result === 'too-long' ? 25 : 16);
   };
   // Confirmation holds only for the revision the user armed against.
-  confirming($('trash'), () => { $('text').value = ''; dirty = true; epoch++; controls(); save(); }, () => revision);
+  confirming($('trash'), () => { $('text').value = ''; dirty = true; epoch++; controls(); save(); },
+    { version: () => revision, key: 'session', stale: () => say('saved', 23) });
 
   // Project and orphan lists: every note of the project, newest first. A note that moves between
   // pages (another window saved it) restarts the scan; after three, duplicates are dropped.
@@ -225,7 +237,7 @@ THE SOFTWARE. -->
           const rows = $('notes').children;
           (rows[Math.min(index, rows.length - 1)]?.querySelector('.note') ?? $(view)).focus();
         }
-      });
+      }, { version: () => note.revision, key: `row:${note.sessionID}`, label: note.title || words[14], stale: () => { say('listStatus', 23); list(); } });
       row.append(button, trash);
       return row;
     }));
@@ -233,18 +245,21 @@ THE SOFTWARE. -->
     if (row) row.querySelector(focus.trash ? '.trash' : '.note').focus();
   }
 
-  // Delete: the first click arms the button, a second within 3 s confirms, unless `version` changed meanwhile.
-  function confirming(button, run, version = () => 0) {
-    let armed;
-    const reset = () => { delete button.dataset.armed; button.innerHTML = ICON; button.setAttribute('aria-label', words[9]); button.title = words[9]; };
-    reset();
+  // Delete: the first click arms one button, a second within 3 s confirms, unless the note's `version`
+  // changed meanwhile (then `stale` says so). A rebuilt row keeps the armed state of its note.
+  function disarm() { if (!armed) return; clearTimeout(armed.timer); const { idle } = armed; armed = null; idle(); }
+  function confirming(button, run, { version = () => 0, key = '', label = '', stale = () => {} } = {}) {
+    const name = text => label ? `${text} — ${label}` : text;
+    const idle = () => { delete button.dataset.armed; button.innerHTML = ICON; button.setAttribute('aria-label', name(words[9])); button.title = name(words[9]); };
+    const arm = () => { button.dataset.armed = '1'; button.textContent = words[10]; button.setAttribute('aria-label', name(words[10])); };
     button.onclick = () => {
-      if (button.dataset.armed) { clearTimeout(button.timer); reset(); if (version() === armed) run(); return; }
-      armed = version();
-      button.dataset.armed = '1'; button.textContent = words[10]; button.setAttribute('aria-label', words[10]);
-      button.timer = setTimeout(reset, 3000);
+      if (armed?.key === key) { const current = armed.version === version(); disarm(); if (current) run(); else stale(); return; }
+      disarm();
+      armed = { key, version: version(), idle, timer: setTimeout(disarm, 3000) };
+      arm();
     };
-    button.relabel = reset;
+    button.relabel = () => armed?.key === key ? arm() : idle();
+    if (armed?.key === key) { armed.idle = idle; arm(); } else idle();
   }
 
   VIEWS.forEach(id => { $(id).onclick = () => select(id); });
