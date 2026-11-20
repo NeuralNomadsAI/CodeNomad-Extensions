@@ -31,7 +31,7 @@ THE SOFTWARE. -->
   [role=tab][aria-selected=true] { background:var(--tile); color:var(--ink); font-weight:600; }
   [role=tabpanel] { flex:1; min-height:0; display:flex; flex-direction:column; gap:8px; }
   [hidden] { display:none !important; }
-  textarea { flex:1; min-height:120px; width:100%; resize:none; padding:8px; border:1px solid var(--line); background:transparent; line-height:1.5; }
+  textarea { unicode-bidi:plaintext; flex:1; min-height:120px; width:100%; resize:none; padding:8px; border:1px solid var(--line); background:transparent; line-height:1.5; }
   .bar { display:flex; flex-wrap:wrap; align-items:center; gap:8px; flex:none; }
   /* Its own row when the panel is too narrow for it beside the buttons. */
   .status { flex:1 1 10em; min-width:0; color:var(--muted); font-size:12px; }
@@ -52,8 +52,9 @@ THE SOFTWARE. -->
   .more svg { width:16px; height:16px; }
   .more[aria-expanded=true] svg { transform:rotate(180deg); }
   .title { display:block; font-weight:600; overflow-wrap:anywhere; }
-  .meta { display:block; margin-top:2px; color:var(--muted); font-size:11px; }
-  .preview { display:-webkit-box; -webkit-line-clamp:3; -webkit-box-orient:vertical; overflow:hidden; padding:4px 4px 8px; white-space:pre-wrap; overflow-wrap:anywhere; cursor:pointer; }
+  .meta { display:block; margin-top:2px; color:var(--muted); font-size:11px; overflow-wrap:anywhere; }
+  /* Vertical space outside the clamped box, so a fourth line never peeks through; each paragraph keeps its own direction. */
+  .preview { display:-webkit-box; -webkit-line-clamp:3; -webkit-box-orient:vertical; overflow:hidden; padding:0 4px; margin:4px 0 8px; white-space:pre-wrap; overflow-wrap:anywhere; unicode-bidi:plaintext; cursor:pointer; }
   .preview[data-expanded] { display:block; }
 </style>
 <div role="tablist"><button role="tab" id="session" aria-controls="sessionView"></button><button role="tab" id="project" aria-controls="listView"></button><button role="tab" id="orphans" aria-controls="listView"></button></div>
@@ -90,7 +91,7 @@ THE SOFTWARE. -->
   // `behind`: a reread was skipped while typing; it runs once the editor is clean again.
   // `reads` orders rereads: only the latest one may answer.
   // `remote` counts changes the host brought in (another window), never this window's own saves.
-  let revision = 0, saved = '', dirty = false, epoch = 0, behind = false, reads = 0, remote = 0, timer, writes = Promise.resolve(), changed;
+  let revision = 0, saved = '', dirty = false, composing = false, epoch = 0, behind = false, reads = 0, remote = 0, timer, writes = Promise.resolve(), changed;
   // Status messages are kept as keys, so a language change retranslates them.
   const shown = {};
   // The armed trash button, if any: { key, version, idle, timer }.
@@ -109,11 +110,14 @@ THE SOFTWARE. -->
     $('sessionView').hidden = view !== 'session'; $('listView').hidden = view === 'session';
     $('listView').setAttribute('aria-labelledby', view === 'session' ? 'project' : view);
   }
-  function select(next) { if (next === view) return; view = next; tabs(); render(); }
+  // Back on Session, a note that could not be read yet is read again.
+  function select(next) { if (next === view) return; view = next; tabs(); render(); if (view === 'session' && $('text').readOnly) read(); }
 
   // Session note: read-only until its first read, saved shortly after typing stops and on blur.
   async function read() {
     $('noSession').hidden = Boolean(session());
+    // Without a conversation the panel's only content is that line: still reachable by keyboard.
+    $('sessionView').tabIndex = session() ? -1 : 0;
     for (const id of ['text', 'sessionBar']) $(id).hidden = !session();
     if (!session()) return;
     const started = epoch, ticket = ++reads;
@@ -140,6 +144,8 @@ THE SOFTWARE. -->
   }
   function save() { clearTimeout(timer); writes = writes.then(write); return writes; }
   async function write() {
+    // Text still being composed (an input method's candidate) is never saved; its end saves it.
+    if (composing) return;
     const text = $('text').value;
     if (text === saved) { if ($('text').value === saved) { dirty = false; say('saved', saved ? 4 : undefined); if (behind) read(); } return; }
     try {
@@ -159,6 +165,11 @@ THE SOFTWARE. -->
       }
       if (result.status === 'saved') {
         revision = result.revision; saved = text; epoch++;
+        // The lists show this save at once, so a deletion armed there holds the new revision.
+        const listed = notes?.find(note => note.sessionID === session());
+        if (listed && text) Object.assign(listed, { text, revision, updated: Date.now() });
+        else if (listed) notes = notes.filter(note => note !== listed);
+        if (listed) { tabs(); render(); }
         if ($('text').value === text) { dirty = false; say('saved', text ? 4 : undefined); if (behind) read(); }
       } else if (result.status === 'no-session') { $('noSession').hidden = false; }
       else say('saved', result.status === 'too-large' ? 17 : result.status === 'full' ? 18 : 6);
@@ -166,7 +177,9 @@ THE SOFTWARE. -->
     } catch { say('saved', 6); }
     controls();
   }
-  $('text').oninput = () => { dirty = true; epoch++; say('saved', 5); controls(); clearTimeout(timer); timer = setTimeout(save, 300); };
+  $('text').oninput = () => { dirty = true; epoch++; say('saved', 5); controls(); clearTimeout(timer); if (!composing) timer = setTimeout(save, 300); };
+  $('text').addEventListener('compositionstart', () => { composing = true; clearTimeout(timer); });
+  $('text').addEventListener('compositionend', () => { composing = false; if (dirty) { clearTimeout(timer); timer = setTimeout(save, 300); } });
   $('text').onblur = () => { if (dirty) save(); };
   $('insert').onclick = async () => {
     const text = $('text').value;
@@ -246,7 +259,7 @@ THE SOFTWARE. -->
         button.onclick = toggle;
       } else {
         more.type = 'button'; more.className = 'more'; more.innerHTML = MORE;
-        more.setAttribute('aria-label', words[26]); more.title = words[26]; more.onclick = toggle;
+        more.setAttribute('aria-label', `${words[26]} — ${note.title || words[14]}`); more.title = words[26]; more.onclick = toggle;
         button.title = words[15];
         // The host shows the conversation, the displayed one included (out of a file preview, say).
         button.onclick = () => {
@@ -280,7 +293,9 @@ THE SOFTWARE. -->
     const after = [...$('notes').children], row = after.find(item => item.dataset.session === focus.id);
     // The focused note went away (deleted, here or elsewhere): its neighbour, else the tab.
     const target = row ? row.querySelector(`.${focus.control}`) ?? row.querySelector('.note') : after[Math.min(focus.index, after.length - 1)]?.querySelector('.note') ?? $(view);
+    // Kept in view only when the rebuild moved it out of sight.
     target.focus({ preventScroll: true });
+    target.scrollIntoView({ block: 'nearest' });
   }
 
   // Delete: the first click arms one button, a second within 3 s confirms, unless the note's `version`
