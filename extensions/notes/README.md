@@ -23,9 +23,10 @@ API 4 `panel.notes` permission; other hosts list it as incompatible.
 Notes are filed by the project's agent-memory identity: the worktrees of one
 repository share them, and so do its clones whose remote is the same hosted
 repository. Like agent memory, they need Git.
-When two windows edit the same note, the window being typed in wins. Switching
-conversations within 0.3 s of the last keystroke can lose that last edit: CodeNomad
-cancels a closing panel's requests. A note holds at most 32 KB and a project 256
+When two windows edit the same note, the window being typed in wins. Closing the
+panel, switching to another panel or switching conversations within 0.3 s of the
+last keystroke can lose that last edit: CodeNomad cancels a closing panel's
+requests. A note holds at most 32 KB and a project 256
 notes. Disabling or updating the addon keeps the notes; removing it deletes them.
 The panel sees no folder, file, transcript, network or command. Language (10
 locales, right-to-left Hebrew) and colours follow the host.

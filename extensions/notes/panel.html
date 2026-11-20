@@ -94,8 +94,9 @@ THE SOFTWARE. -->
   let revision = 0, saved = '', dirty = false, composing = false, epoch = 0, behind = false, reads = 0, remote = 0, timer, writes = Promise.resolve(), changed;
   // Status messages are kept as keys, so a language change retranslates them.
   const shown = {};
-  // The armed trash button, if any: { key, version, idle, timer }.
+  // The armed trash button, if any: { key, version, idle, timer }; the unfolded notes, by session.
   let armed = null;
+  const unfolded = new Set();
   // The host's info view is no conversation.
   const session = () => context?.sessionId && context.sessionId !== 'info' ? context.sessionId : null;
   const say = (element, index) => { shown[element] = index; $(element).textContent = index === undefined ? '' : words[index]; };
@@ -111,12 +112,13 @@ THE SOFTWARE. -->
     $('listView').setAttribute('aria-labelledby', view === 'session' ? 'project' : view);
   }
   // Back on Session, a note that could not be read yet is read again.
-  // Back on Session, a note that could not be read yet is read again; Project and Orphans reread the list
+  // Back on Session the note is read again; Project and Orphans reread the list
   // (titles change without a notes event) while showing what they have.
   function select(next) {
     if (next === view) return;
     view = next; tabs(); render();
-    if (view === 'session') { if ($('text').readOnly) read(); } else list();
+    // A clean editor rereads (another backend may have written); a draft keeps its text.
+    if (view === 'session') read(); else list();
   }
 
   // Session note: read-only until its first read, saved shortly after typing stops and on blur.
@@ -241,8 +243,9 @@ THE SOFTWARE. -->
     // Rows are rebuilt: keep the focused control and the expanded notes by session.
     const rows = [...$('notes').children], active = document.activeElement?.closest?.('li')
     const control = ['trash', 'more', 'preview'].find(name => document.activeElement.classList?.contains(name)) ?? 'note';
-    const focus = active && { id: active.dataset.session, control, index: rows.indexOf(active) };
-    const expanded = new Set(rows.filter(row => row.querySelector('.preview[data-expanded]')).map(row => row.dataset.session));
+    const box = $('notes').getBoundingClientRect(), was = document.activeElement.getBoundingClientRect();
+    const inView = was.bottom > box.top && was.top < box.bottom;
+    const focus = active && { id: active.dataset.session, control, index: rows.indexOf(active), inView };
     say('listStatus', listFailed ? 19 : notes && !visible.length ? (orphans ? 12 : 11) : undefined);
     $('notes').replaceChildren(...visible.map(note => {
       const row = document.createElement('li'), item = document.createElement('div'), button = document.createElement('button'), trash = document.createElement('button'), more = document.createElement('button');
@@ -261,9 +264,18 @@ THE SOFTWARE. -->
       // Any note unfolds: from its disclosure button (the title on orphans, "Whole note" on Project) or a
       // click on its text; selecting text never acts.
       const disclosure = orphans ? button : more;
-      const show = open => { if (open) preview.dataset.expanded = ''; else delete preview.dataset.expanded; disclosure.setAttribute('aria-expanded', String(open)); };
-      const toggle = () => show(!('expanded' in preview.dataset));
-      disclosure.setAttribute('aria-controls', preview.id); show(expanded.has(note.sessionID));
+      const show = open => {
+        if (open) unfolded.add(note.sessionID); else unfolded.delete(note.sessionID);
+        // The row on screen now, which a refresh may have rebuilt since this one was made.
+        const live = [...$('notes').children].find(item => item.dataset.session === note.sessionID);
+        const [shownPreview, shownDisclosure] = live ? [live.querySelector('.preview'), live.querySelector(orphans ? '.note' : '.more')] : [preview, disclosure];
+        if (open) shownPreview.dataset.expanded = ''; else delete shownPreview.dataset.expanded;
+        shownDisclosure.setAttribute('aria-expanded', String(open));
+      };
+      const toggle = () => show(!unfolded.has(note.sessionID));
+      disclosure.setAttribute('aria-controls', preview.id);
+      if (unfolded.has(note.sessionID)) preview.dataset.expanded = '';
+      disclosure.setAttribute('aria-expanded', String(unfolded.has(note.sessionID)));
       preview.onclick = () => { if (!getSelection()?.toString()) toggle(); };
       if (orphans) {
         button.onclick = toggle;
@@ -273,8 +285,9 @@ THE SOFTWARE. -->
         button.title = words[15];
         // The host shows the conversation, the displayed one included (out of a file preview, say).
         button.onclick = async () => {
-          // Opening another conversation closes this panel: an unsaved draft is saved first, else it stays in view.
-          if (!current && dirty) {
+          // Opening a conversation can close this panel (always on a phone): an unsaved draft is saved first,
+          // else it stays in view and nothing opens.
+          if (dirty) {
             await save();
             if (dirty) { select('session'); $('text').focus(); return; }
           }
@@ -308,9 +321,9 @@ THE SOFTWARE. -->
     const after = [...$('notes').children], row = after.find(item => item.dataset.session === focus.id);
     // The focused note went away (deleted, here or elsewhere): its neighbour, else the tab.
     const target = row ? row.querySelector(`.${focus.control}`) ?? row.querySelector('.note') : after[Math.min(focus.index, after.length - 1)]?.querySelector('.note') ?? $(view);
-    // Kept in view only when the rebuild moved it out of sight.
+    // Kept in view only if it was in view before the rebuild moved it.
     target.focus({ preventScroll: true });
-    target.scrollIntoView({ block: 'nearest' });
+    if (focus.inView) target.scrollIntoView({ block: 'nearest' });
   }
 
   // Delete: the first click arms one button, a second within 3 s confirms, unless the note's `version`
