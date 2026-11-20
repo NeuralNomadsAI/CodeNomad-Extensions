@@ -72,6 +72,24 @@
         "tag": "design-v1.0.0",
         "asset": "neuralnomads.design-1.0.0.zip"
       }
+    },
+    {
+      "manifest": {
+        "id": "neuralnomads.notes",
+        "name": "Notes",
+        "version": "1.0.0",
+        "apiVersion": 4,
+        "author": "NeuralNomadsAI",
+        "license": "MIT",
+        "repository": "https://github.com/NeuralNomadsAI/CodeNomad-Extensions",
+        "permissions": ["session.context", "panel.notes", "composer.prefill"]
+      },
+      "description": "One note per conversation, kept in your CodeNomad profile: edit the displayed conversation's note, list the project's notes and open their conversations, and keep or delete notes of deleted conversations. Requires the extension API 4 panel.notes permission and Git. The panel only adds a note to the message box when asked and never sends a message; no filesystem, network or command access.",
+      "digest": "e5e668a0fb4c3e0ec49462d8aa0d2623d39345ba0fa09bfe30b21fa2e20c3312",
+      "release": {
+        "tag": "notes-v1.0.0",
+        "asset": "neuralnomads.notes-1.0.0.zip"
+      }
     }
   ]
 }
