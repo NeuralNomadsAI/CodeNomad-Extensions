@@ -26,14 +26,15 @@ THE SOFTWARE. -->
   button:focus-visible, textarea:focus-visible { outline:2px solid var(--focus); outline-offset:2px; }
   button:disabled { opacity:.5; cursor:default; }
   [role=tablist] { display:flex; border:1px solid var(--line); flex:none; }
-  [role=tab] { flex:1; border:0; color:var(--muted); }
+  [role=tab] { flex:1 1 0; min-width:0; border:0; color:var(--muted); overflow-wrap:anywhere; }
   [role=tab] + [role=tab] { border-inline-start:1px solid var(--line); }
   [role=tab][aria-selected=true] { background:var(--tile); color:var(--ink); font-weight:600; }
   [role=tabpanel] { flex:1; min-height:0; display:flex; flex-direction:column; gap:8px; }
   [hidden] { display:none !important; }
   textarea { flex:1; min-height:120px; width:100%; resize:none; padding:8px; border:1px solid var(--line); background:transparent; line-height:1.5; }
-  .bar { display:flex; align-items:center; gap:8px; flex:none; }
-  .status { flex:1; min-width:0; color:var(--muted); font-size:12px; }
+  .bar { display:flex; flex-wrap:wrap; align-items:center; gap:8px; flex:none; }
+  /* Its own row when the panel is too narrow for it beside the buttons. */
+  .status { flex:1 1 10em; min-width:0; color:var(--muted); font-size:12px; }
   p.status { flex:none; margin:0; line-height:1.5; }
   .trash { display:inline-flex; align-items:center; justify-content:center; min-width:28px; padding:4px; color:var(--muted); }
   .trash svg { width:16px; height:16px; }
@@ -43,13 +44,14 @@ THE SOFTWARE. -->
   li { display:flex; align-items:flex-start; gap:4px; border-inline-start:2px solid transparent; }
   li + li { border-top:1px solid var(--line); }
   li.current { border-inline-start-color:var(--focus); }
-  .note { flex:1; min-width:0; display:block; padding:8px 4px; border:0; text-align:start; }
-  .note:hover { background:var(--tile); }
+  .item { flex:1; min-width:0; }
+  .note { width:100%; display:block; padding:8px 4px 0; border:0; text-align:start; }
+  .item:hover { background:var(--tile); }
   li .trash { margin-top:6px; }
   .title { display:block; font-weight:600; overflow-wrap:anywhere; }
   .meta { display:block; margin-top:2px; color:var(--muted); font-size:11px; }
-  .preview { display:-webkit-box; -webkit-line-clamp:3; -webkit-box-orient:vertical; overflow:hidden; margin-top:4px; white-space:pre-wrap; overflow-wrap:anywhere; }
-  [aria-expanded=true] .preview { display:block; }
+  .preview { display:-webkit-box; -webkit-line-clamp:3; -webkit-box-orient:vertical; overflow:hidden; padding:4px 4px 8px; white-space:pre-wrap; overflow-wrap:anywhere; cursor:pointer; }
+  .preview[data-expanded] { display:block; }
 </style>
 <div role="tablist"><button role="tab" id="session" aria-controls="sessionView"></button><button role="tab" id="project" aria-controls="listView"></button><button role="tab" id="orphans" aria-controls="listView"></button></div>
 <section id="sessionView" role="tabpanel" aria-labelledby="session">
@@ -82,7 +84,8 @@ THE SOFTWARE. -->
   // The displayed conversation's note: `saved` is what the host holds at `revision`. `epoch` counts
   // edits and saves: a read started before either never replaces the editor.
   // `behind`: a reread was skipped while typing; it runs once the editor is clean again.
-  let revision = 0, saved = '', dirty = false, epoch = 0, behind = false, timer, writes = Promise.resolve(), changed;
+  // `reads` orders rereads: only the latest one may answer.
+  let revision = 0, saved = '', dirty = false, epoch = 0, behind = false, reads = 0, timer, writes = Promise.resolve(), changed;
   // Status messages are kept as keys, so a language change retranslates them.
   const shown = {};
   // The armed trash button, if any: { key, version, idle, timer }.
@@ -108,9 +111,10 @@ THE SOFTWARE. -->
     $('noSession').hidden = Boolean(session());
     for (const id of ['text', 'sessionBar']) $(id).hidden = !session();
     if (!session()) return;
-    const started = epoch;
+    const started = epoch, ticket = ++reads;
     try {
       const note = await api.notes.get();
+      if (ticket !== reads) return;
       if (dirty || epoch !== started) { behind = true; return; }
       behind = false;
       revision = note?.revision ?? 0; saved = note?.text ?? '';
@@ -155,13 +159,13 @@ THE SOFTWARE. -->
   $('insert').onclick = async () => {
     const text = $('text').value;
     if (new TextEncoder().encode(text).length > PREFILL_BYTES) { say('saved', 25); return; }
-    // On a phone the host closes the panel after inserting: the note is saved first.
-    if (dirty) await save();
+    // On a phone the host closes the panel after inserting: the note is saved first, else nothing is inserted.
+    if (dirty) { await save(); if (dirty) return; }
     const result = await api.composer.prefill({ text }).catch(() => 'invalid');
     say('saved', result === 'added' ? 21 : result === 'too-long' ? 25 : 16);
   };
   // Confirmation holds only for the revision the user armed against.
-  confirming($('trash'), () => { $('text').value = ''; dirty = true; epoch++; controls(); save(); },
+  confirming($('trash'), () => { $('text').value = ''; dirty = true; epoch++; controls(); $('text').focus(); save(); },
     { version: () => revision, key: 'session', stale: () => say('saved', 23) });
 
   // Project and orphan lists: every note of the project, newest first. A note that moves between
@@ -200,12 +204,13 @@ THE SOFTWARE. -->
     if (view === 'session') return;
     const orphans = view === 'orphans', visible = (notes ?? []).filter(note => note.orphan === orphans);
     // Rows are rebuilt: keep the focused control and the expanded notes by session.
-    const active = document.activeElement?.closest?.('li'), focus = active && { id: active.dataset.session, trash: document.activeElement.classList.contains('trash') };
-    const expanded = new Set([...$('notes').querySelectorAll('[aria-expanded=true]')].map(button => button.closest('li').dataset.session));
+    const rows = [...$('notes').children], active = document.activeElement?.closest?.('li')
+    const focus = active && { id: active.dataset.session, trash: document.activeElement.classList.contains('trash'), index: rows.indexOf(active) };
+    const expanded = new Set(rows.filter(row => row.querySelector('[aria-expanded=true]')).map(row => row.dataset.session));
     say('listStatus', listFailed ? 19 : notes && !visible.length ? (orphans ? 12 : 11) : undefined);
     $('notes').replaceChildren(...visible.map(note => {
-      const row = document.createElement('li'), button = document.createElement('button'), trash = document.createElement('button');
-      const title = document.createElement('span'), meta = document.createElement('span'), preview = document.createElement('span');
+      const row = document.createElement('li'), item = document.createElement('div'), button = document.createElement('button'), trash = document.createElement('button');
+      const title = document.createElement('span'), meta = document.createElement('span'), preview = document.createElement('div');
       const current = note.sessionID === session();
       row.className = current ? 'current' : ''; row.dataset.session = note.sessionID;
       button.type = 'button'; button.className = 'note';
@@ -213,11 +218,14 @@ THE SOFTWARE. -->
       title.className = 'title'; title.dir = 'auto'; title.textContent = note.title || words[14];
       meta.className = 'meta'; meta.title = new Date(note.updated).toLocaleString(context?.locale || 'en');
       meta.textContent = [ago(note.updated), orphans ? words[13] : current ? words[20] : ''].filter(Boolean).join(' · ');
+      // The note's text is its own region: the button carries only the title and date.
       preview.className = 'preview'; preview.dir = 'auto'; preview.textContent = note.text;
-      button.append(title, meta, preview);
+      preview.id = `preview-${note.sessionID.replace(/[^\w-]/g, '_')}`; preview.onclick = () => button.click();
+      button.append(title, meta); item.className = 'item'; item.append(button, preview);
       if (orphans) {
-        button.setAttribute('aria-expanded', String(expanded.has(note.sessionID)));
-        button.onclick = () => button.setAttribute('aria-expanded', String(button.getAttribute('aria-expanded') !== 'true'));
+        const show = open => { button.setAttribute('aria-expanded', String(open)); if (open) preview.dataset.expanded = ''; else delete preview.dataset.expanded; };
+        button.setAttribute('aria-controls', preview.id); show(expanded.has(note.sessionID));
+        button.onclick = () => show(button.getAttribute('aria-expanded') !== 'true');
       } else {
         button.title = words[15];
         button.onclick = () => {
@@ -238,11 +246,16 @@ THE SOFTWARE. -->
           (rows[Math.min(index, rows.length - 1)]?.querySelector('.note') ?? $(view)).focus();
         }
       }, { version: () => note.revision, key: `row:${note.sessionID}`, label: note.title || words[14], stale: () => { say('listStatus', 23); list(); } });
-      row.append(button, trash);
+      row.append(item, trash);
       return row;
     }));
-    const row = focus && [...$('notes').children].find(item => item.dataset.session === focus.id);
-    if (row) row.querySelector(focus.trash ? '.trash' : '.note').focus();
+    // An empty panel stays reachable by keyboard.
+    $('listView').tabIndex = visible.length ? -1 : 0;
+    if (!focus) return;
+    const after = [...$('notes').children], row = after.find(item => item.dataset.session === focus.id);
+    // The focused note went away (deleted, here or elsewhere): its neighbour, else the tab.
+    const target = row ? row.querySelector(focus.trash ? '.trash' : '.note') : after[Math.min(focus.index, after.length - 1)]?.querySelector('.note') ?? $(view);
+    target.focus({ preventScroll: true });
   }
 
   // Delete: the first click arms one button, a second within 3 s confirms, unless the note's `version`
@@ -271,7 +284,8 @@ THE SOFTWARE. -->
     select(next); $(next).focus();
   };
   // Another window, a deleted conversation or a reconnect: read both again.
-  api.notes.onChanged(() => { clearTimeout(changed); changed = setTimeout(() => { if (dirty) behind = true; else read(); list(); }, 150); });
+  // A draft that could not be saved (a connection outage) is saved again then.
+  api.notes.onChanged(() => { clearTimeout(changed); changed = setTimeout(() => { if (dirty) { behind = true; save(); } else read(); list(); }, 150); });
   api.onContext(value => {
     const first = !context; context = value;
     words = translations[value.locale.split('-')[0]] || translations.en;

@@ -88,7 +88,7 @@ try {
   // Project: newest first, the displayed conversation marked; another one opens through the host.
   await frame.getByRole('tab', { name: 'Session' }).press('ArrowRight')
   assert.equal(await frame.getByRole('tab', { name: 'Projet (2)' }).getAttribute('aria-selected'), 'true')
-  const cards = frame.locator('.note')
+  const cards = frame.locator('#notes li')
   await cards.first().filter({ hasText: 'Plan du jour !' }).waitFor()
   assert.match(await cards.nth(0).innerText(), /^Alpha\s+maintenant · affichée\s+Plan du jour !$/)
   assert.match(await cards.nth(1).innerText(), /^Bêta\s+il y a 1 heure\s+Autre note$/)
