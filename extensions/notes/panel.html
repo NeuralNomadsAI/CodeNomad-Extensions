@@ -23,7 +23,7 @@ THE SOFTWARE. -->
   body { margin:0; padding:12px; color:var(--ink); display:flex; flex-direction:column; gap:8px; }
   button, textarea { font:inherit; color:inherit; }
   button { border:1px solid var(--line); background:transparent; min-height:28px; padding:4px 8px; cursor:pointer; }
-  button:focus-visible, textarea:focus-visible, .preview:focus-visible { outline:2px solid var(--focus); outline-offset:2px; }
+  button:focus-visible, textarea:focus-visible { outline:2px solid var(--focus); outline-offset:2px; }
   button:disabled { opacity:.5; cursor:default; }
   [role=tablist] { display:flex; border:1px solid var(--line); flex:none; }
   [role=tab] { flex:1 1 0; min-width:0; border:0; color:var(--muted); overflow-wrap:anywhere; }
@@ -47,7 +47,10 @@ THE SOFTWARE. -->
   .item { flex:1; min-width:0; }
   .note { width:100%; display:block; padding:8px 4px 0; border:0; text-align:start; }
   .item:hover { background:var(--tile); }
-  li .trash { margin-top:6px; }
+  li .trash, li .more { margin-top:6px; }
+  .more { display:inline-flex; align-items:center; justify-content:center; min-width:28px; padding:4px; color:var(--muted); }
+  .more svg { width:16px; height:16px; }
+  .more[aria-expanded=true] svg { transform:rotate(180deg); }
   .title { display:block; font-weight:600; overflow-wrap:anywhere; }
   .meta { display:block; margin-top:2px; color:var(--muted); font-size:11px; }
   .preview { display:-webkit-box; -webkit-line-clamp:3; -webkit-box-orient:vertical; overflow:hidden; padding:4px 4px 8px; white-space:pre-wrap; overflow-wrap:anywhere; cursor:pointer; }
@@ -63,21 +66,22 @@ THE SOFTWARE. -->
 <script>
 (() => {
   const $ = id => document.getElementById(id), api = window.codenomad;
+  const MORE = '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" aria-hidden="true"><path d="M4 6l4 4 4-4"/></svg>';
   const ICON = '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" aria-hidden="true"><path d="M2.5 4h11M6 4V2.5h4V4M4 4l.7 9.5h6.6L12 4M6.8 6.5v5M9.2 6.5v5"/></svg>';
   // Session, Project, Orphans, placeholder, Saved, Saving, not saved, no conversation, Insert, Delete, Delete?, no notes, no orphans,
   // conversation deleted, Untitled, Open the conversation, cannot insert, too long, full, unavailable, shown, added, Notes,
-  // not deleted (changed elsewhere), cannot open, too long to insert
+  // not deleted (changed elsewhere), cannot open, too long to insert, whole note
   const translations = {
-    en:['Session','Project','Orphans','Write a note for this conversation…','Saved','Saving…','Not saved. Keep typing to retry.','Open a conversation to write its note.','Insert into message','Delete','Delete?','No notes in this project yet.','No orphaned notes.','conversation deleted','Untitled','Open the conversation','This note cannot be inserted into the message box.','Note too long (32 KB max).','This project already has 256 notes.','Notes unavailable.','shown','Added to the message box.','Notes','Changed in another window, so it was not deleted.','This conversation can’t be opened from here.','Too long for the message box (2 KB max).'],
-    fr:['Session','Projet','Orphelines','Écrire une note pour cette conversation…','Enregistré','Enregistrement…','Non enregistré. Continuez à écrire pour réessayer.','Ouvrez une conversation pour écrire sa note.','Insérer dans le message','Supprimer','Supprimer ?','Aucune note dans ce projet pour l’instant.','Aucune note orpheline.','conversation supprimée','Sans titre','Ouvrir la conversation','Cette note ne peut pas être insérée dans la zone de saisie.','Note trop longue (32 Ko max).','Ce projet a déjà 256 notes.','Notes indisponibles.','affichée','Ajoutée à la zone de saisie.','Notes','Modifiée dans une autre fenêtre : elle n’a pas été supprimée.','Cette conversation ne peut pas être ouverte d’ici.','Trop longue pour la zone de saisie (2 Ko max).'],
-    de:['Sitzung','Projekt','Verwaist','Notiz zu dieser Unterhaltung schreiben…','Gespeichert','Wird gespeichert…','Nicht gespeichert. Weiterschreiben, um es erneut zu versuchen.','Öffnen Sie eine Unterhaltung, um ihre Notiz zu schreiben.','In die Nachricht einfügen','Löschen','Löschen?','Noch keine Notizen in diesem Projekt.','Keine verwaisten Notizen.','Unterhaltung gelöscht','Ohne Titel','Unterhaltung öffnen','Diese Notiz kann nicht in das Eingabefeld eingefügt werden.','Notiz zu lang (max. 32 KB).','Dieses Projekt hat bereits 256 Notizen.','Notizen nicht verfügbar.','angezeigt','Zum Eingabefeld hinzugefügt.','Notizen','In einem anderen Fenster geändert, daher nicht gelöscht.','Diese Unterhaltung kann von hier aus nicht geöffnet werden.','Zu lang für das Eingabefeld (max. 2 KB).'],
-    es:['Sesión','Proyecto','Huérfanas','Escribe una nota para esta conversación…','Guardado','Guardando…','No guardado. Sigue escribiendo para reintentar.','Abre una conversación para escribir su nota.','Insertar en el mensaje','Eliminar','¿Eliminar?','Aún no hay notas en este proyecto.','No hay notas huérfanas.','conversación eliminada','Sin título','Abrir la conversación','Esta nota no se puede insertar en el editor de mensajes.','Nota demasiado larga (máx. 32 KB).','Este proyecto ya tiene 256 notas.','Notas no disponibles.','mostrada','Añadida al editor de mensajes.','Notas','Cambiada en otra ventana, así que no se eliminó.','Esta conversación no se puede abrir desde aquí.','Demasiado larga para el editor de mensajes (máx. 2 KB).'],
-    he:['סשן','פרויקט','יתומות','כתבו הערה לשיחה זו…','נשמר','שומר…','לא נשמר. המשיכו להקליד כדי לנסות שוב.','פתחו שיחה כדי לכתוב את ההערה שלה.','הוספה להודעה','מחיקה','למחוק?','אין עדיין הערות בפרויקט זה.','אין הערות יתומות.','השיחה נמחקה','ללא כותרת','פתיחת השיחה','לא ניתן להוסיף הערה זו לשדה הקלט.','ההערה ארוכה מדי (32KB לכל היותר).','בפרויקט זה כבר יש 256 הערות.','ההערות אינן זמינות.','מוצגת','נוספה לשדה הקלט.','הערות','ההערה שונתה בחלון אחר ולכן לא נמחקה.','לא ניתן לפתוח את השיחה הזו מכאן.','ארוכה מדי לשדה הקלט (2KB לכל היותר).'],
-    ja:['セッション','プロジェクト','孤立','この会話のメモを書く…','保存済み','保存中…','保存できませんでした。入力を続けると再試行します。','会話を開くとメモを書けます。','メッセージに挿入','削除','削除しますか？','このプロジェクトにはまだメモがありません。','孤立したメモはありません。','会話は削除済み','無題','会話を開く','このメモは入力欄に挿入できません。','メモが長すぎます（最大 32 KB）。','このプロジェクトのメモはすでに 256 件あります。','メモを利用できません。','表示中','入力欄に追加しました。','メモ','別のウィンドウで変更されたため、削除されませんでした。','この会話はここから開けません。','入力欄には長すぎます（最大 2 KB）。'],
-    ne:['सत्र','प्रोजेक्ट','अनाथ','यो कुराकानीका लागि नोट लेख्नुहोस्…','सुरक्षित गरियो','सुरक्षित गर्दै…','सुरक्षित भएन। फेरि प्रयास गर्न लेख्न जारी राख्नुहोस्।','नोट लेख्न कुनै कुराकानी खोल्नुहोस्।','सन्देशमा घुसाउनुहोस्','मेटाउनुहोस्','मेटाउने?','यस प्रोजेक्टमा अहिलेसम्म कुनै नोट छैन।','कुनै अनाथ नोट छैन।','कुराकानी मेटाइयो','शीर्षकविहीन','कुराकानी खोल्नुहोस्','यो नोट कम्पोजरमा घुसाउन सकिँदैन।','नोट धेरै लामो छ (अधिकतम 32 KB)।','यस प्रोजेक्टमा पहिले नै 256 नोट छन्।','नोटहरू उपलब्ध छैनन्।','देखाइएको','कम्पोजरमा थपियो।','नोटहरू','अर्को विन्डोमा परिवर्तन भएकाले मेटाइएन।','यो कुराकानी यहाँबाट खोल्न सकिँदैन।','कम्पोजरका लागि धेरै लामो (अधिकतम 2 KB)।'],
-    ru:['Сессия','Проект','Осиротевшие','Заметка к этому разговору…','Сохранено','Сохранение…','Не сохранено. Продолжайте ввод, чтобы повторить.','Откройте разговор, чтобы написать к нему заметку.','Вставить в сообщение','Удалить','Удалить?','В этом проекте пока нет заметок.','Нет осиротевших заметок.','разговор удалён','Без названия','Открыть разговор','Эту заметку нельзя вставить в поле ввода.','Заметка слишком длинная (не более 32 КБ).','В этом проекте уже 256 заметок.','Заметки недоступны.','открыт','Добавлено в поле ввода.','Заметки','Изменена в другом окне, поэтому не удалена.','Этот разговор нельзя открыть отсюда.','Слишком длинная для поля ввода (не более 2 КБ).'],
-    tr:['Oturum','Proje','Sahipsiz','Bu konuşma için bir not yazın…','Kaydedildi','Kaydediliyor…','Kaydedilmedi. Yeniden denemek için yazmaya devam edin.','Notunu yazmak için bir konuşma açın.','İletiye ekle','Sil','Silinsin mi?','Bu projede henüz not yok.','Sahipsiz not yok.','konuşma silindi','Başlıksız','Konuşmayı aç','Bu not ileti düzenleyicisine eklenemez.','Not çok uzun (en fazla 32 KB).','Bu projede zaten 256 not var.','Notlar kullanılamıyor.','gösteriliyor','İleti düzenleyicisine eklendi.','Notlar','Başka bir pencerede değiştirildiği için silinmedi.','Bu konuşma buradan açılamıyor.','İleti düzenleyicisi için çok uzun (en fazla 2 KB).'],
-    zh:['会话','项目','孤立','为此对话写一条笔记…','已保存','正在保存…','未保存。继续输入即可重试。','打开一个对话以编写其笔记。','插入到消息','删除','确认删除？','此项目还没有笔记。','没有孤立的笔记。','对话已删除','无标题','打开对话','无法将此笔记插入输入框。','笔记过长（最多 32 KB）。','此项目已有 256 条笔记。','笔记不可用。','当前显示','已添加到输入框。','笔记','已在其他窗口中修改，因此未删除。','无法从这里打开此对话。','对输入框来说过长（最多 2 KB）。']
+    en:['Session','Project','Orphans','Write a note for this conversation…','Saved','Saving…','Not saved. Keep typing to retry.','Open a conversation to write its note.','Insert into message','Delete','Delete?','No notes in this project yet.','No orphaned notes.','conversation deleted','Untitled','Open the conversation','This note cannot be inserted into the message box.','Note too long (32 KB max).','This project already has 256 notes.','Notes unavailable.','shown','Added to the message box.','Notes','Changed in another window, so it was not deleted.','This conversation can’t be opened from here.','Too long for the message box (2 KB max).','Whole note'],
+    fr:['Session','Projet','Orphelines','Écrire une note pour cette conversation…','Enregistré','Enregistrement…','Non enregistré. Continuez à écrire pour réessayer.','Ouvrez une conversation pour écrire sa note.','Insérer dans le message','Supprimer','Supprimer ?','Aucune note dans ce projet pour l’instant.','Aucune note orpheline.','conversation supprimée','Sans titre','Ouvrir la conversation','Cette note ne peut pas être insérée dans la zone de saisie.','Note trop longue (32 Ko max).','Ce projet a déjà 256 notes.','Notes indisponibles.','affichée','Ajoutée à la zone de saisie.','Notes','Modifiée dans une autre fenêtre : elle n’a pas été supprimée.','Cette conversation ne peut pas être ouverte d’ici.','Trop longue pour la zone de saisie (2 Ko max).','Note entière'],
+    de:['Sitzung','Projekt','Verwaist','Notiz zu dieser Unterhaltung schreiben…','Gespeichert','Wird gespeichert…','Nicht gespeichert. Weiterschreiben, um es erneut zu versuchen.','Öffnen Sie eine Unterhaltung, um ihre Notiz zu schreiben.','In die Nachricht einfügen','Löschen','Löschen?','Noch keine Notizen in diesem Projekt.','Keine verwaisten Notizen.','Unterhaltung gelöscht','Ohne Titel','Unterhaltung öffnen','Diese Notiz kann nicht in das Eingabefeld eingefügt werden.','Notiz zu lang (max. 32 KB).','Dieses Projekt hat bereits 256 Notizen.','Notizen nicht verfügbar.','angezeigt','Zum Eingabefeld hinzugefügt.','Notizen','In einem anderen Fenster geändert, daher nicht gelöscht.','Diese Unterhaltung kann von hier aus nicht geöffnet werden.','Zu lang für das Eingabefeld (max. 2 KB).','Ganze Notiz'],
+    es:['Sesión','Proyecto','Huérfanas','Escribe una nota para esta conversación…','Guardado','Guardando…','No guardado. Sigue escribiendo para reintentar.','Abre una conversación para escribir su nota.','Insertar en el mensaje','Eliminar','¿Eliminar?','Aún no hay notas en este proyecto.','No hay notas huérfanas.','conversación eliminada','Sin título','Abrir la conversación','Esta nota no se puede insertar en el editor de mensajes.','Nota demasiado larga (máx. 32 KB).','Este proyecto ya tiene 256 notas.','Notas no disponibles.','mostrada','Añadida al editor de mensajes.','Notas','Cambiada en otra ventana, así que no se eliminó.','Esta conversación no se puede abrir desde aquí.','Demasiado larga para el editor de mensajes (máx. 2 KB).','Nota completa'],
+    he:['סשן','פרויקט','יתומות','כתבו הערה לשיחה זו…','נשמר','שומר…','לא נשמר. המשיכו להקליד כדי לנסות שוב.','פתחו שיחה כדי לכתוב את ההערה שלה.','הוספה להודעה','מחיקה','למחוק?','אין עדיין הערות בפרויקט זה.','אין הערות יתומות.','השיחה נמחקה','ללא כותרת','פתיחת השיחה','לא ניתן להוסיף הערה זו לשדה הקלט.','ההערה ארוכה מדי (32KB לכל היותר).','בפרויקט זה כבר יש 256 הערות.','ההערות אינן זמינות.','מוצגת','נוספה לשדה הקלט.','הערות','ההערה שונתה בחלון אחר ולכן לא נמחקה.','לא ניתן לפתוח את השיחה הזו מכאן.','ארוכה מדי לשדה הקלט (2KB לכל היותר).','ההערה המלאה'],
+    ja:['セッション','プロジェクト','孤立','この会話のメモを書く…','保存済み','保存中…','保存できませんでした。入力を続けると再試行します。','会話を開くとメモを書けます。','メッセージに挿入','削除','削除しますか？','このプロジェクトにはまだメモがありません。','孤立したメモはありません。','会話は削除済み','無題','会話を開く','このメモは入力欄に挿入できません。','メモが長すぎます（最大 32 KB）。','このプロジェクトのメモはすでに 256 件あります。','メモを利用できません。','表示中','入力欄に追加しました。','メモ','別のウィンドウで変更されたため、削除されませんでした。','この会話はここから開けません。','入力欄には長すぎます（最大 2 KB）。','メモ全体'],
+    ne:['सत्र','प्रोजेक्ट','अनाथ','यो कुराकानीका लागि नोट लेख्नुहोस्…','सुरक्षित गरियो','सुरक्षित गर्दै…','सुरक्षित भएन। फेरि प्रयास गर्न लेख्न जारी राख्नुहोस्।','नोट लेख्न कुनै कुराकानी खोल्नुहोस्।','सन्देशमा घुसाउनुहोस्','मेटाउनुहोस्','मेटाउने?','यस प्रोजेक्टमा अहिलेसम्म कुनै नोट छैन।','कुनै अनाथ नोट छैन।','कुराकानी मेटाइयो','शीर्षकविहीन','कुराकानी खोल्नुहोस्','यो नोट कम्पोजरमा घुसाउन सकिँदैन।','नोट धेरै लामो छ (अधिकतम 32 KB)।','यस प्रोजेक्टमा पहिले नै 256 नोट छन्।','नोटहरू उपलब्ध छैनन्।','देखाइएको','कम्पोजरमा थपियो।','नोटहरू','अर्को विन्डोमा परिवर्तन भएकाले मेटाइएन।','यो कुराकानी यहाँबाट खोल्न सकिँदैन।','कम्पोजरका लागि धेरै लामो (अधिकतम 2 KB)।','पूरा नोट'],
+    ru:['Сессия','Проект','Осиротевшие','Заметка к этому разговору…','Сохранено','Сохранение…','Не сохранено. Продолжайте ввод, чтобы повторить.','Откройте разговор, чтобы написать к нему заметку.','Вставить в сообщение','Удалить','Удалить?','В этом проекте пока нет заметок.','Нет осиротевших заметок.','разговор удалён','Без названия','Открыть разговор','Эту заметку нельзя вставить в поле ввода.','Заметка слишком длинная (не более 32 КБ).','В этом проекте уже 256 заметок.','Заметки недоступны.','открыт','Добавлено в поле ввода.','Заметки','Изменена в другом окне, поэтому не удалена.','Этот разговор нельзя открыть отсюда.','Слишком длинная для поля ввода (не более 2 КБ).','Вся заметка'],
+    tr:['Oturum','Proje','Sahipsiz','Bu konuşma için bir not yazın…','Kaydedildi','Kaydediliyor…','Kaydedilmedi. Yeniden denemek için yazmaya devam edin.','Notunu yazmak için bir konuşma açın.','İletiye ekle','Sil','Silinsin mi?','Bu projede henüz not yok.','Sahipsiz not yok.','konuşma silindi','Başlıksız','Konuşmayı aç','Bu not ileti düzenleyicisine eklenemez.','Not çok uzun (en fazla 32 KB).','Bu projede zaten 256 not var.','Notlar kullanılamıyor.','gösteriliyor','İleti düzenleyicisine eklendi.','Notlar','Başka bir pencerede değiştirildiği için silinmedi.','Bu konuşma buradan açılamıyor.','İleti düzenleyicisi için çok uzun (en fazla 2 KB).','Notun tamamı'],
+    zh:['会话','项目','孤立','为此对话写一条笔记…','已保存','正在保存…','未保存。继续输入即可重试。','打开一个对话以编写其笔记。','插入到消息','删除','确认删除？','此项目还没有笔记。','没有孤立的笔记。','对话已删除','无标题','打开对话','无法将此笔记插入输入框。','笔记过长（最多 32 KB）。','此项目已有 256 条笔记。','笔记不可用。','当前显示','已添加到输入框。','笔记','已在其他窗口中修改，因此未删除。','无法从这里打开此对话。','对输入框来说过长（最多 2 KB）。','完整笔记']
   };
   const VIEWS = ['session', 'project', 'orphans'], PREFILL_BYTES = 2048;
   let words = translations.en, context, view = 'session', notes = null, listing = 0, listFailed = false;
@@ -118,9 +122,11 @@ THE SOFTWARE. -->
       if (ticket !== reads) return;
       if (dirty || epoch !== started) { behind = true; return; }
       behind = false;
+      const previous = revision;
       revision = note?.revision ?? 0; saved = note?.text ?? '';
       const replaced = $('text').value !== saved;
-      if (replaced) { $('text').value = saved; remote++; }
+      if (replaced) $('text').value = saved;
+      if (replaced || (note?.revision ?? 0) !== previous) remote++;
       $('text').readOnly = false;
       // An unchanged note keeps the status shown (an insertion refusal, for instance).
       if (replaced || shown.saved === undefined || shown.saved === 19) say('saved', saved ? 4 : undefined);
@@ -211,11 +217,12 @@ THE SOFTWARE. -->
     const orphans = view === 'orphans', visible = (notes ?? []).filter(note => note.orphan === orphans);
     // Rows are rebuilt: keep the focused control and the expanded notes by session.
     const rows = [...$('notes').children], active = document.activeElement?.closest?.('li')
-    const focus = active && { id: active.dataset.session, trash: document.activeElement.classList.contains('trash'), index: rows.indexOf(active) };
+    const control = ['trash', 'more', 'preview'].find(name => document.activeElement.classList?.contains(name)) ?? 'note';
+    const focus = active && { id: active.dataset.session, control, index: rows.indexOf(active) };
     const expanded = new Set(rows.filter(row => row.querySelector('.preview[data-expanded]')).map(row => row.dataset.session));
     say('listStatus', listFailed ? 19 : notes && !visible.length ? (orphans ? 12 : 11) : undefined);
     $('notes').replaceChildren(...visible.map(note => {
-      const row = document.createElement('li'), item = document.createElement('div'), button = document.createElement('button'), trash = document.createElement('button');
+      const row = document.createElement('li'), item = document.createElement('div'), button = document.createElement('button'), trash = document.createElement('button'), more = document.createElement('button');
       const title = document.createElement('span'), meta = document.createElement('span'), preview = document.createElement('div');
       const current = note.sessionID === session();
       row.className = current ? 'current' : ''; row.dataset.session = note.sessionID;
@@ -228,22 +235,27 @@ THE SOFTWARE. -->
       preview.className = 'preview'; preview.dir = 'auto'; preview.textContent = note.text;
       preview.id = `preview-${note.sessionID.replace(/[^\w-]/g, '_')}`;
       button.append(title, meta); item.className = 'item'; item.append(button, preview);
-      // Any note unfolds from its text (click, or Enter once focused); selecting text never acts.
-      const show = open => { if (open) preview.dataset.expanded = ''; else delete preview.dataset.expanded; if (orphans) button.setAttribute('aria-expanded', String(open)); };
+      // Any note unfolds: from its disclosure button (the title on orphans, "Whole note" on Project) or a
+      // click on its text; selecting text never acts.
+      const disclosure = orphans ? button : more;
+      const show = open => { if (open) preview.dataset.expanded = ''; else delete preview.dataset.expanded; disclosure.setAttribute('aria-expanded', String(open)); };
       const toggle = () => show(!('expanded' in preview.dataset));
-      preview.tabIndex = 0; show(expanded.has(note.sessionID));
+      disclosure.setAttribute('aria-controls', preview.id); show(expanded.has(note.sessionID));
       preview.onclick = () => { if (!getSelection()?.toString()) toggle(); };
-      preview.onkeydown = event => { if (event.key === 'Enter' && !event.repeat) { event.preventDefault(); toggle(); } };
       if (orphans) {
-        button.setAttribute('aria-controls', preview.id);
         button.onclick = toggle;
       } else {
+        more.type = 'button'; more.className = 'more'; more.innerHTML = MORE;
+        more.setAttribute('aria-label', words[26]); more.title = words[26]; more.onclick = toggle;
         button.title = words[15];
         // The host shows the conversation, the displayed one included (out of a file preview, say).
         button.onclick = () => {
-          // A conversation that cannot be opened from here still shows its whole note.
-          api.notes.open(note.sessionID).then(result => { if (!result?.opened) { say('listStatus', 24); show(true); } }, () => say('listStatus', 19));
-          if (current) { select('session'); $('text').focus(); }
+          // A conversation that cannot be opened from here still shows its whole note; the displayed one
+          // switches to Session once the host accepted.
+          api.notes.open(note.sessionID).then(result => {
+            if (!result?.opened) { say('listStatus', 24); show(true); }
+            else if (current) { select('session'); $('text').focus(); }
+          }, () => say('listStatus', 19));
         };
       }
       trash.type = 'button'; trash.className = 'trash';
@@ -259,7 +271,7 @@ THE SOFTWARE. -->
           (rows[Math.min(index, rows.length - 1)]?.querySelector('.note') ?? $(view)).focus();
         }
       }, { version: () => note.revision, key: `row:${note.sessionID}`, label: note.title || words[14], stale: async () => { await list(); say('listStatus', 23); } });
-      row.append(item, trash);
+      row.append(item, ...(orphans ? [] : [more]), trash);
       return row;
     }));
     // An empty panel stays reachable by keyboard.
@@ -267,7 +279,7 @@ THE SOFTWARE. -->
     if (!focus) return;
     const after = [...$('notes').children], row = after.find(item => item.dataset.session === focus.id);
     // The focused note went away (deleted, here or elsewhere): its neighbour, else the tab.
-    const target = row ? row.querySelector(focus.trash ? '.trash' : '.note') : after[Math.min(focus.index, after.length - 1)]?.querySelector('.note') ?? $(view);
+    const target = row ? row.querySelector(`.${focus.control}`) ?? row.querySelector('.note') : after[Math.min(focus.index, after.length - 1)]?.querySelector('.note') ?? $(view);
     target.focus({ preventScroll: true });
   }
 
