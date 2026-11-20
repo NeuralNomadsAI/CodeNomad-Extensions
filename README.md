@@ -4,8 +4,8 @@ Official online catalogue of optional CodeNomad right-panel UI addons. Extension
 are distributed independently of CodeNomad releases. This repository contains the
 curated `catalog.json`, contribution rules, the **MCP Assets** gallery requested in
 CodeNomad #801, the **Contribute** issue and pull request view following
-CodeNomad #500, the **Design** light table for the Design image companion and a
-minimal **Session info** distribution demo.
+CodeNomad #500, the **Design** light table for the Design image companion,
+**Notes** for per-conversation notes and a minimal **Session info** distribution demo.
 
 ## Install
 
@@ -91,6 +91,24 @@ The test loads the checkout's frame document, prefill composition and archive
 validator, and simulates the API 4 host channel in Chromium. Run it against a
 CodeNomad checkout supporting extension API 4.
 
+## Notes
+
+`extensions/notes/` keeps one note per conversation. Its Session view edits the
+displayed conversation's note with autosave and can insert it into the message
+box; Project lists the notes of the project's conversations and opens them;
+Orphans keeps the notes of deleted conversations until you delete them. The host
+files notes in the CodeNomad profile by project identity: worktrees of one
+repository share them, and so do clones whose remote is the same hosted repository.
+
+This addon requires a CodeNomad host supporting the **extension API 4**
+`panel.notes` permission (CodeNomad PR #1599), with `composer.prefill`; other hosts
+list it as incompatible. It has no filesystem, network or command access.
+
+```sh
+python scripts/package.py extensions/notes dist
+node scripts/test-notes.mjs /absolute/path/to/CodeNomad
+```
+
 ## Publish an addon
 
 An addon ZIP contains exactly two UTF-8 files at its root: `manifest.json` and
@@ -103,8 +121,8 @@ tool-result assets. API 3 requires both `session.context` and `repository.workIt
 for bounded pages of the project repository's issues and pull requests, read by the
 host. API 4 requires `session.context` plus any non-empty subset of
 `session.images.read`, `session.images.prompts` (only with `session.images.read`),
-`composer.prefill`, `images.conversation`, `opencode.designAgent` and
-`panel.preferences`, and installs only on a CodeNomad host supporting extension
+`composer.prefill`, `images.conversation`, `opencode.designAgent`,
+`panel.preferences` and `panel.notes`, and installs only on a CodeNomad host supporting extension
 API 4. No API permits local file access, network access or native commands.
 [CONTRIBUTING.md](CONTRIBUTING.md) describes each permission and how API 4 addons
 are tested.

@@ -1,0 +1,375 @@
+<!-- MIT License — Copyright (c) 2026 NeuralNomadsAI
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+The above copyright notice and this permission notice shall be included in
+all copies or substantial portions of the Software.
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
+THE SOFTWARE. -->
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<style>
+  :root { color-scheme: light; --bg:#f7f8fa; --tile:#edf0f4; --ink:#232a36; --muted:#626e80; --line:#cdd4df; --focus:#336cb7; --danger:#b3261e; font:13px system-ui,sans-serif; }
+  :root[data-appearance=dark] { color-scheme:dark; --bg:#1d2430; --tile:#252f3d; --ink:#e0e7f1; --muted:#a1aec0; --line:#3b485c; --focus:#83b6ef; --danger:#f2b8b5; }
+  * { box-sizing:border-box; border-radius:0; }
+  html, body { height:100%; background:var(--bg); }
+  body { margin:0; padding:12px; color:var(--ink); display:flex; flex-direction:column; gap:8px; }
+  button, textarea { font:inherit; color:inherit; }
+  button { border:1px solid var(--line); background:transparent; min-height:28px; padding:4px 8px; cursor:pointer; }
+  button:focus-visible, textarea:focus-visible { outline:2px solid var(--focus); outline-offset:2px; }
+  button:disabled { opacity:.5; cursor:default; }
+  [role=tablist] { display:flex; border:1px solid var(--line); flex:none; }
+  [role=tab] { flex:1 1 0; min-width:0; border:0; color:var(--muted); overflow-wrap:anywhere; }
+  [role=tab] + [role=tab] { border-inline-start:1px solid var(--line); }
+  [role=tab][aria-selected=true] { background:var(--tile); color:var(--ink); font-weight:600; }
+  [role=tabpanel] { flex:1; min-height:0; display:flex; flex-direction:column; gap:8px; }
+  [hidden] { display:none !important; }
+  textarea { unicode-bidi:plaintext; flex:1; min-height:120px; width:100%; resize:none; padding:8px; border:1px solid var(--line); background:transparent; line-height:1.5; }
+  .bar { display:flex; flex-wrap:wrap; align-items:center; gap:8px; flex:none; }
+  /* Its own row when the panel is too narrow for it beside the buttons. */
+  .status { flex:1 1 10em; min-width:0; color:var(--muted); font-size:12px; }
+  p.status { flex:none; margin:0; line-height:1.5; }
+  .trash { display:inline-flex; align-items:center; justify-content:center; min-width:28px; padding:4px; color:var(--muted); }
+  .trash svg { width:16px; height:16px; }
+  .trash:hover { color:var(--danger); }
+  .trash[data-armed] { color:var(--danger); border-color:var(--danger); padding:4px 8px; font-weight:600; }
+  ul { list-style:none; margin:0; padding:0; overflow:auto; }
+  li { display:flex; align-items:flex-start; gap:4px; border-inline-start:2px solid transparent; }
+  li + li { border-top:1px solid var(--line); }
+  li.current { border-inline-start-color:var(--focus); }
+  .item { flex:1; min-width:0; }
+  .note { width:100%; display:block; padding:8px 4px 0; border:0; text-align:start; }
+  .item:hover { background:var(--tile); }
+  li .trash, li .more { margin-top:6px; }
+  .more { display:inline-flex; align-items:center; justify-content:center; min-width:28px; padding:4px; color:var(--muted); }
+  .more svg { width:16px; height:16px; }
+  .more[aria-expanded=true] svg { transform:rotate(180deg); }
+  .title { display:block; font-weight:600; overflow-wrap:anywhere; }
+  .meta { display:block; margin-top:2px; color:var(--muted); font-size:11px; overflow-wrap:anywhere; }
+  /* Vertical space outside the clamped box, so a fourth line never peeks through; each paragraph keeps its own direction. */
+  .preview { display:-webkit-box; -webkit-line-clamp:3; -webkit-box-orient:vertical; overflow:hidden; padding:0 4px; margin:4px 0 8px; white-space:pre-wrap; overflow-wrap:anywhere; unicode-bidi:plaintext; cursor:pointer; }
+  .preview[data-expanded] { display:block; }
+</style>
+<div role="tablist"><button role="tab" id="session" aria-controls="sessionView"></button><button role="tab" id="project" aria-controls="listView"></button><button role="tab" id="orphans" aria-controls="listView"></button></div>
+<section id="sessionView" role="tabpanel" aria-labelledby="session">
+  <p id="noSession" class="status" hidden></p>
+  <textarea id="text" spellcheck="true" dir="auto" readonly></textarea>
+  <div class="bar" id="sessionBar"><span id="saved" class="status" role="status"></span><button id="insert" type="button" disabled></button><button id="trash" class="trash" type="button" disabled></button></div>
+</section>
+<section id="listView" role="tabpanel" hidden><p id="listStatus" class="status" role="status"></p><ul id="notes"></ul></section>
+<script>
+(() => {
+  const $ = id => document.getElementById(id), api = window.codenomad;
+  const MORE = '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" aria-hidden="true"><path d="M4 6l4 4 4-4"/></svg>';
+  const ICON = '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" aria-hidden="true"><path d="M2.5 4h11M6 4V2.5h4V4M4 4l.7 9.5h6.6L12 4M6.8 6.5v5M9.2 6.5v5"/></svg>';
+  // Session, Project, Orphans, placeholder, Saved, Saving, not saved, no conversation, Insert, Delete, Delete?, no notes, no orphans,
+  // conversation deleted, Untitled, Open the conversation, cannot insert, too long, full, unavailable, shown, added, Notes,
+  // not deleted (changed elsewhere), cannot open, too long to insert, whole note
+  const translations = {
+    en:['Session','Project','Orphans','Write a note for this conversation…','Saved','Saving…','Not saved. Keep typing to retry.','Open a conversation to write its note.','Insert into message','Delete','Delete?','No notes in this project yet.','No orphaned notes.','conversation deleted','Untitled','Open the conversation','This note cannot be inserted into the message box.','Note too long (32 KB max).','This project already has 256 notes.','Notes unavailable.','shown','Added to the message box.','Notes','Changed in another window, so it was not deleted.','This conversation can’t be opened from here.','Too long for the message box (2 KB max).','Whole note'],
+    fr:['Session','Projet','Orphelines','Écrire une note pour cette conversation…','Enregistré','Enregistrement…','Non enregistré. Continuez à écrire pour réessayer.','Ouvrez une conversation pour écrire sa note.','Insérer dans le message','Supprimer','Supprimer ?','Aucune note dans ce projet pour l’instant.','Aucune note orpheline.','conversation supprimée','Sans titre','Ouvrir la conversation','Cette note ne peut pas être insérée dans la zone de saisie.','Note trop longue (32 Ko max).','Ce projet a déjà 256 notes.','Notes indisponibles.','affichée','Ajoutée à la zone de saisie.','Notes','Modifiée dans une autre fenêtre : elle n’a pas été supprimée.','Cette conversation ne peut pas être ouverte d’ici.','Trop longue pour la zone de saisie (2 Ko max).','Note entière'],
+    de:['Sitzung','Projekt','Verwaist','Notiz zu dieser Unterhaltung schreiben…','Gespeichert','Wird gespeichert…','Nicht gespeichert. Weiterschreiben, um es erneut zu versuchen.','Öffnen Sie eine Unterhaltung, um ihre Notiz zu schreiben.','In die Nachricht einfügen','Löschen','Löschen?','Noch keine Notizen in diesem Projekt.','Keine verwaisten Notizen.','Unterhaltung gelöscht','Ohne Titel','Unterhaltung öffnen','Diese Notiz kann nicht in das Eingabefeld eingefügt werden.','Notiz zu lang (max. 32 KB).','Dieses Projekt hat bereits 256 Notizen.','Notizen nicht verfügbar.','angezeigt','Zum Eingabefeld hinzugefügt.','Notizen','In einem anderen Fenster geändert, daher nicht gelöscht.','Diese Unterhaltung kann von hier aus nicht geöffnet werden.','Zu lang für das Eingabefeld (max. 2 KB).','Ganze Notiz'],
+    es:['Sesión','Proyecto','Huérfanas','Escribe una nota para esta conversación…','Guardado','Guardando…','No guardado. Sigue escribiendo para reintentar.','Abre una conversación para escribir su nota.','Insertar en el mensaje','Eliminar','¿Eliminar?','Aún no hay notas en este proyecto.','No hay notas huérfanas.','conversación eliminada','Sin título','Abrir la conversación','Esta nota no se puede insertar en el editor de mensajes.','Nota demasiado larga (máx. 32 KB).','Este proyecto ya tiene 256 notas.','Notas no disponibles.','mostrada','Añadida al editor de mensajes.','Notas','Cambiada en otra ventana, así que no se eliminó.','Esta conversación no se puede abrir desde aquí.','Demasiado larga para el editor de mensajes (máx. 2 KB).','Nota completa'],
+    he:['סשן','פרויקט','יתומות','כתבו הערה לשיחה זו…','נשמר','שומר…','לא נשמר. המשיכו להקליד כדי לנסות שוב.','פתחו שיחה כדי לכתוב את ההערה שלה.','הוספה להודעה','מחיקה','למחוק?','אין עדיין הערות בפרויקט זה.','אין הערות יתומות.','השיחה נמחקה','ללא כותרת','פתיחת השיחה','לא ניתן להוסיף הערה זו לשדה הקלט.','ההערה ארוכה מדי (32KB לכל היותר).','בפרויקט זה כבר יש 256 הערות.','ההערות אינן זמינות.','מוצגת','נוספה לשדה הקלט.','הערות','ההערה שונתה בחלון אחר ולכן לא נמחקה.','לא ניתן לפתוח את השיחה הזו מכאן.','ארוכה מדי לשדה הקלט (2KB לכל היותר).','ההערה המלאה'],
+    ja:['セッション','プロジェクト','孤立','この会話のメモを書く…','保存済み','保存中…','保存できませんでした。入力を続けると再試行します。','会話を開くとメモを書けます。','メッセージに挿入','削除','削除しますか？','このプロジェクトにはまだメモがありません。','孤立したメモはありません。','会話は削除済み','無題','会話を開く','このメモは入力欄に挿入できません。','メモが長すぎます（最大 32 KB）。','このプロジェクトのメモはすでに 256 件あります。','メモを利用できません。','表示中','入力欄に追加しました。','メモ','別のウィンドウで変更されたため、削除されませんでした。','この会話はここから開けません。','入力欄には長すぎます（最大 2 KB）。','メモ全体'],
+    ne:['सत्र','प्रोजेक्ट','अनाथ','यो कुराकानीका लागि नोट लेख्नुहोस्…','सुरक्षित गरियो','सुरक्षित गर्दै…','सुरक्षित भएन। फेरि प्रयास गर्न लेख्न जारी राख्नुहोस्।','नोट लेख्न कुनै कुराकानी खोल्नुहोस्।','सन्देशमा घुसाउनुहोस्','मेटाउनुहोस्','मेटाउने?','यस प्रोजेक्टमा अहिलेसम्म कुनै नोट छैन।','कुनै अनाथ नोट छैन।','कुराकानी मेटाइयो','शीर्षकविहीन','कुराकानी खोल्नुहोस्','यो नोट कम्पोजरमा घुसाउन सकिँदैन।','नोट धेरै लामो छ (अधिकतम 32 KB)।','यस प्रोजेक्टमा पहिले नै 256 नोट छन्।','नोटहरू उपलब्ध छैनन्।','देखाइएको','कम्पोजरमा थपियो।','नोटहरू','अर्को विन्डोमा परिवर्तन भएकाले मेटाइएन।','यो कुराकानी यहाँबाट खोल्न सकिँदैन।','कम्पोजरका लागि धेरै लामो (अधिकतम 2 KB)।','पूरा नोट'],
+    ru:['Сессия','Проект','Осиротевшие','Заметка к этому разговору…','Сохранено','Сохранение…','Не сохранено. Продолжайте ввод, чтобы повторить.','Откройте разговор, чтобы написать к нему заметку.','Вставить в сообщение','Удалить','Удалить?','В этом проекте пока нет заметок.','Нет осиротевших заметок.','разговор удалён','Без названия','Открыть разговор','Эту заметку нельзя вставить в поле ввода.','Заметка слишком длинная (не более 32 КБ).','В этом проекте уже 256 заметок.','Заметки недоступны.','открыт','Добавлено в поле ввода.','Заметки','Изменена в другом окне, поэтому не удалена.','Этот разговор нельзя открыть отсюда.','Слишком длинная для поля ввода (не более 2 КБ).','Вся заметка'],
+    tr:['Oturum','Proje','Sahipsiz','Bu konuşma için bir not yazın…','Kaydedildi','Kaydediliyor…','Kaydedilmedi. Yeniden denemek için yazmaya devam edin.','Notunu yazmak için bir konuşma açın.','İletiye ekle','Sil','Silinsin mi?','Bu projede henüz not yok.','Sahipsiz not yok.','konuşma silindi','Başlıksız','Konuşmayı aç','Bu not ileti düzenleyicisine eklenemez.','Not çok uzun (en fazla 32 KB).','Bu projede zaten 256 not var.','Notlar kullanılamıyor.','gösteriliyor','İleti düzenleyicisine eklendi.','Notlar','Başka bir pencerede değiştirildiği için silinmedi.','Bu konuşma buradan açılamıyor.','İleti düzenleyicisi için çok uzun (en fazla 2 KB).','Notun tamamı'],
+    zh:['会话','项目','孤立','为此对话写一条笔记…','已保存','正在保存…','未保存。继续输入即可重试。','打开一个对话以编写其笔记。','插入到消息','删除','确认删除？','此项目还没有笔记。','没有孤立的笔记。','对话已删除','无标题','打开对话','无法将此笔记插入输入框。','笔记过长（最多 32 KB）。','此项目已有 256 条笔记。','笔记不可用。','当前显示','已添加到输入框。','笔记','已在其他窗口中修改，因此未删除。','无法从这里打开此对话。','对输入框来说过长（最多 2 KB）。','完整笔记']
+  };
+  const VIEWS = ['session', 'project', 'orphans'], PREFILL_BYTES = 2048;
+  let words = translations.en, context, view = 'session', notes = null, listing = 0, listFailed = false;
+  // The displayed conversation's note: `saved` is what the host holds at `revision`. `epoch` counts
+  // edits and saves: a read started before either never replaces the editor.
+  // `behind`: a reread was skipped while typing; it runs once the editor is clean again.
+  // `reads` orders rereads: only the latest one may answer.
+  // `remote` counts changes the host brought in (another window), never this window's own saves.
+  let revision = 0, saved = '', dirty = false, composing = false, epoch = 0, behind = false, reads = 0, remote = 0, timer, writes = Promise.resolve(), changed;
+  // Status messages are kept as keys, so a language change retranslates them.
+  const shown = {};
+  // The armed trash button, if any: { key, version, idle, timer }; the unfolded notes, by session.
+  let armed = null;
+  const unfolded = new Set();
+  // The host's info view is no conversation.
+  const session = () => context?.sessionId && context.sessionId !== 'info' ? context.sessionId : null;
+  const say = (element, index) => { shown[element] = index; $(element).textContent = index === undefined ? '' : words[index]; };
+
+  function tabs() {
+    const counts = notes && { project: notes.filter(note => !note.orphan).length, orphans: notes.filter(note => note.orphan).length };
+    VIEWS.forEach((id, index) => {
+      const tab = $(id);
+      tab.setAttribute('aria-selected', String(id === view)); tab.tabIndex = id === view ? 0 : -1;
+      tab.textContent = words[index] + (counts && id !== 'session' ? ` (${counts[id]})` : '');
+    });
+    $('sessionView').hidden = view !== 'session'; $('listView').hidden = view === 'session';
+    $('listView').setAttribute('aria-labelledby', view === 'session' ? 'project' : view);
+  }
+  // Back on Session, a note that could not be read yet is read again.
+  // Back on Session the note is read again; Project and Orphans reread the list
+  // (titles change without a notes event) while showing what they have.
+  function select(next) {
+    if (next === view) return;
+    view = next; tabs(); render();
+    // A clean editor rereads (another backend may have written); a draft keeps its text.
+    if (view === 'session') read(); else list();
+  }
+
+  // Session note: read-only until its first read, saved shortly after typing stops and on blur.
+  async function read() {
+    $('noSession').hidden = Boolean(session());
+    // Without a conversation the panel's only content is that line: still reachable by keyboard.
+    $('sessionView').tabIndex = session() ? -1 : 0;
+    for (const id of ['text', 'sessionBar']) $(id).hidden = !session();
+    if (!session()) return;
+    const started = epoch, ticket = ++reads;
+    try {
+      const note = await api.notes.get();
+      if (ticket !== reads) return;
+      if (dirty || epoch !== started) { behind = true; return; }
+      behind = false;
+      const previous = revision;
+      revision = note?.revision ?? 0; saved = note?.text ?? '';
+      const replaced = $('text').value !== saved;
+      if (replaced) $('text').value = saved;
+      if (replaced || (note?.revision ?? 0) !== previous) remote++;
+      $('text').readOnly = false;
+      // An unchanged note keeps the status shown (an insertion refusal, for instance).
+      if (replaced || shown.saved === undefined || shown.saved === 19) say('saved', saved ? 4 : undefined);
+      controls();
+    } catch { say('saved', 19); }
+  }
+  function controls() {
+    $('insert').disabled = !$('text').value.trim(); $('trash').disabled = !$('text').value && !revision;
+    // An empty editor follows the panel's direction; typed text, its own.
+    $('text').dir = $('text').value ? 'auto' : document.documentElement.dir;
+  }
+  function save() { clearTimeout(timer); writes = writes.then(write); return writes; }
+  async function write() {
+    // Text still being composed (an input method's candidate) is never saved; its end saves it.
+    if (composing) return;
+    const text = $('text').value;
+    if (text === saved) { if ($('text').value === saved) { dirty = false; say('saved', saved ? 4 : undefined); if (behind) read(); } return; }
+    try {
+      let result = await api.notes.set(text, revision);
+      if (result.status === 'conflict') {
+        if (!text) {
+          // A deletion never overrides a change it did not see: show the newer note instead.
+          revision = result.note?.revision ?? 0; saved = result.note?.text ?? ''; epoch++; remote++;
+          if ($('text').value === text) { $('text').value = saved; dirty = false; }
+          say('saved', result.note ? 23 : undefined); controls(); return;
+        }
+        // Another window wrote meanwhile: the window being typed in wins, at the revision just read
+        // (three tries; a busier note keeps the text here for the next save).
+        remote++;
+        for (let tries = 0; result.status === 'conflict' && tries < 3; tries++) result = await api.notes.set(text, result.note?.revision ?? 0);
+        if (result.status === 'conflict') revision = result.note?.revision ?? 0;
+      }
+      if (result.status === 'saved') {
+        revision = result.revision; saved = text; epoch++;
+        // The lists show this save at once, so a deletion armed there holds the new revision.
+        const listed = notes?.find(note => note.sessionID === session());
+        if (listed && text) Object.assign(listed, { text, revision, updated: Date.now() });
+        else if (listed) notes = notes.filter(note => note !== listed);
+        if (listed) { tabs(); render(); }
+        if ($('text').value === text) { dirty = false; say('saved', text ? 4 : undefined); if (behind) read(); }
+      } else if (result.status === 'no-session') { $('noSession').hidden = false; }
+      else say('saved', result.status === 'too-large' ? 17 : result.status === 'full' ? 18 : 6);
+      if (result.status === 'conflict') { epoch++; dirty = true; }
+    } catch { say('saved', 6); }
+    controls();
+  }
+  $('text').oninput = () => { dirty = true; epoch++; say('saved', 5); controls(); clearTimeout(timer); if (!composing) timer = setTimeout(save, 300); };
+  $('text').addEventListener('compositionstart', () => { composing = true; clearTimeout(timer); });
+  $('text').addEventListener('compositionend', () => { composing = false; if (dirty) { clearTimeout(timer); timer = setTimeout(save, 300); } });
+  $('text').onblur = () => { if (dirty) save(); };
+  $('insert').onclick = async () => {
+    const text = $('text').value;
+    if (new TextEncoder().encode(text).length > PREFILL_BYTES) { say('saved', 25); return; }
+    // On a phone the host closes the panel after inserting: the note is saved first, else nothing is inserted.
+    if (dirty) { await save(); if (dirty) return; }
+    const result = await api.composer.prefill({ text }).catch(() => 'invalid');
+    say('saved', result === 'added' ? 21 : result === 'too-long' ? 25 : 16);
+  };
+  // Confirmation holds only while no other window changed the note since it was armed.
+  // From the keyboard, the editor takes focus once the key is released: a held key never types into it.
+  confirming($('trash'), event => {
+    $('text').value = ''; dirty = true; epoch++; controls(); save();
+    if (event?.detail === 0) addEventListener('keyup', () => $('text').focus(), { once: true }); else $('text').focus();
+  },
+    { version: () => remote, key: 'session', stale: () => say('saved', 23) });
+
+  // Project and orphan lists: every note of the project, newest first. A note that moves between
+  // pages (another window saved it) restarts the scan; after three, duplicates are dropped.
+  async function list() {
+    const run = ++listing;
+    let all = [];
+    try {
+      for (let attempt = 0; attempt < 3; attempt++) {
+        const seen = new Set();
+        let cursor, repeated = false;
+        all = [];
+        do {
+          const page = await api.notes.list(cursor);
+          if (run !== listing) return;
+          for (const note of page.notes) {
+            if (seen.has(note.sessionID)) repeated = true;
+            else { seen.add(note.sessionID); all.push(note); }
+          }
+          cursor = page.cursor ?? undefined;
+        } while (cursor && !repeated);
+        if (!repeated) break;
+      }
+      notes = all; listFailed = false;
+    } catch { if (run !== listing) return; listFailed = true; }
+    tabs(); render();
+  }
+  function ago(time) {
+    const format = new Intl.RelativeTimeFormat(context?.locale || 'en', { numeric: 'auto' }), seconds = (time - Date.now()) / 1000;
+    for (const [unit, size] of [['year', 31536000], ['month', 2592000], ['week', 604800], ['day', 86400], ['hour', 3600], ['minute', 60]]) {
+      if (Math.abs(seconds) >= size) return format.format(Math.round(seconds / size), unit);
+    }
+    return format.format(0, 'second');
+  }
+  function render() {
+    if (view === 'session') return;
+    const orphans = view === 'orphans', visible = (notes ?? []).filter(note => note.orphan === orphans);
+    // Rows are rebuilt: keep the focused control and the expanded notes by session.
+    const rows = [...$('notes').children], active = document.activeElement?.closest?.('li')
+    const control = ['trash', 'more', 'preview'].find(name => document.activeElement.classList?.contains(name)) ?? 'note';
+    const box = $('notes').getBoundingClientRect(), was = document.activeElement.getBoundingClientRect();
+    const inView = was.bottom > box.top && was.top < box.bottom;
+    const focus = active && { id: active.dataset.session, control, index: rows.indexOf(active), inView };
+    say('listStatus', listFailed ? 19 : notes && !visible.length ? (orphans ? 12 : 11) : undefined);
+    $('notes').replaceChildren(...visible.map(note => {
+      const row = document.createElement('li'), item = document.createElement('div'), button = document.createElement('button'), trash = document.createElement('button'), more = document.createElement('button');
+      const title = document.createElement('span'), meta = document.createElement('span'), preview = document.createElement('div');
+      const current = note.sessionID === session();
+      row.className = current ? 'current' : ''; row.dataset.session = note.sessionID;
+      button.type = 'button'; button.className = 'note';
+      // User text keeps its own direction inside the panel's.
+      title.className = 'title'; title.dir = 'auto'; title.textContent = note.title || words[14];
+      meta.className = 'meta'; meta.title = new Date(note.updated).toLocaleString(context?.locale || 'en');
+      meta.textContent = [ago(note.updated), orphans ? words[13] : current ? words[20] : ''].filter(Boolean).join(' · ');
+      // The note's text is its own region: the button carries only the title and date.
+      preview.className = 'preview'; preview.dir = 'auto'; preview.textContent = note.text;
+      preview.id = `preview-${note.sessionID.replace(/[^\w-]/g, '_')}`;
+      button.append(title, meta); item.className = 'item'; item.append(button, preview);
+      // Any note unfolds: from its disclosure button (the title on orphans, "Whole note" on Project) or a
+      // click on its text; selecting text never acts.
+      const disclosure = orphans ? button : more;
+      const show = open => {
+        if (open) unfolded.add(note.sessionID); else unfolded.delete(note.sessionID);
+        // The row on screen now, which a refresh may have rebuilt since this one was made.
+        const live = [...$('notes').children].find(item => item.dataset.session === note.sessionID);
+        const [shownPreview, shownDisclosure] = live ? [live.querySelector('.preview'), live.querySelector(orphans ? '.note' : '.more')] : [preview, disclosure];
+        if (open) shownPreview.dataset.expanded = ''; else delete shownPreview.dataset.expanded;
+        shownDisclosure.setAttribute('aria-expanded', String(open));
+      };
+      const toggle = () => show(!unfolded.has(note.sessionID));
+      disclosure.setAttribute('aria-controls', preview.id);
+      if (unfolded.has(note.sessionID)) preview.dataset.expanded = '';
+      disclosure.setAttribute('aria-expanded', String(unfolded.has(note.sessionID)));
+      preview.onclick = () => { if (!getSelection()?.toString()) toggle(); };
+      if (orphans) {
+        button.onclick = toggle;
+      } else {
+        more.type = 'button'; more.className = 'more'; more.innerHTML = MORE;
+        more.setAttribute('aria-label', `${words[26]} — ${note.title || words[14]}`); more.title = words[26]; more.onclick = toggle;
+        button.title = words[15];
+        // The host shows the conversation, the displayed one included (out of a file preview, say).
+        button.onclick = async () => {
+          // Opening a conversation can close this panel (always on a phone): an unsaved draft is saved first,
+          // else it stays in view and nothing opens.
+          if (dirty) {
+            await save();
+            if (dirty) { select('session'); $('text').focus(); return; }
+          }
+          // A conversation that cannot be opened from here still shows its whole note; the displayed one
+          // switches to Session once the host accepted.
+          api.notes.open(note.sessionID).then(result => {
+            if (!result?.opened) { say('listStatus', 24); show(true); }
+            else if (current) { select('session'); $('text').focus(); }
+          }, () => say('listStatus', 19));
+        };
+      }
+      trash.type = 'button'; trash.className = 'trash';
+      confirming(trash, async () => {
+        const index = [...$('notes').children].indexOf(row);
+        const result = await api.notes.delete(note.sessionID, note.revision).catch(() => undefined);
+        if (current) read();
+        await list();
+        if (result?.status !== 'deleted') say('listStatus', result ? 23 : 19);
+        // The row is gone: the keyboard moves to its neighbour, else to the tab.
+        if (!document.activeElement || document.activeElement === document.body) {
+          const rows = $('notes').children;
+          (rows[Math.min(index, rows.length - 1)]?.querySelector('.note') ?? $(view)).focus();
+        }
+      }, { version: () => note.revision, key: `row:${note.sessionID}`, label: note.title || words[14], stale: async () => { await list(); say('listStatus', 23); } });
+      row.append(item, ...(orphans ? [] : [more]), trash);
+      return row;
+    }));
+    // An empty panel stays reachable by keyboard.
+    $('listView').tabIndex = visible.length ? -1 : 0;
+    if (!focus) return;
+    const after = [...$('notes').children], row = after.find(item => item.dataset.session === focus.id);
+    // The focused note went away (deleted, here or elsewhere): its neighbour, else the tab.
+    const target = row ? row.querySelector(`.${focus.control}`) ?? row.querySelector('.note') : after[Math.min(focus.index, after.length - 1)]?.querySelector('.note') ?? $(view);
+    // Kept in view only if it was in view before the rebuild moved it.
+    target.focus({ preventScroll: true });
+    if (focus.inView) target.scrollIntoView({ block: 'nearest' });
+  }
+
+  // Delete: the first click arms one button, a second within 3 s confirms, unless the note's `version`
+  // changed meanwhile (then `stale` says so). A rebuilt row keeps the armed state of its note.
+  function disarm() { if (!armed) return; clearTimeout(armed.timer); const { idle } = armed; armed = null; idle(); }
+  function confirming(button, run, { version = () => 0, key = '', label = '', stale = () => {} } = {}) {
+    const name = text => label ? `${text} — ${label}` : text;
+    const idle = () => { delete button.dataset.armed; button.innerHTML = ICON; button.setAttribute('aria-label', name(words[9])); button.title = name(words[9]); };
+    const arm = () => { button.dataset.armed = '1'; button.textContent = words[10]; button.setAttribute('aria-label', name(words[10])); };
+    // A held key repeats: only distinct presses arm and confirm.
+    button.onkeydown = event => { if (event.repeat && (event.key === 'Enter' || event.key === ' ')) event.preventDefault(); };
+    button.onclick = event => {
+      if (armed?.key === key) { const current = armed.version === version(); disarm(); if (current) run(event); else stale(); return; }
+      disarm();
+      armed = { key, version: version(), idle, timer: setTimeout(disarm, 3000) };
+      arm();
+    };
+    button.relabel = () => armed?.key === key ? arm() : idle();
+    if (armed?.key === key) { armed.idle = idle; arm(); } else idle();
+  }
+
+  VIEWS.forEach(id => { $(id).onclick = () => select(id); });
+  document.querySelector('[role=tablist]').onkeydown = event => {
+    const step = { ArrowRight: 1, ArrowLeft: -1 }[event.key], edge = { Home: VIEWS[0], End: VIEWS[2] }[event.key];
+    if (!step && !edge) return;
+    event.preventDefault();
+    const rtl = document.documentElement.dir === 'rtl', next = edge ?? VIEWS[(VIEWS.indexOf(view) + (rtl ? -step : step) + 3) % 3];
+    select(next); $(next).focus();
+  };
+  // Another window, a deleted conversation or a reconnect: read both again.
+  // A draft that could not be saved (a connection outage) is saved again then.
+  api.notes.onChanged(() => { clearTimeout(changed); changed = setTimeout(() => { if (dirty) { behind = true; save(); } else read(); list(); }, 150); });
+  api.onContext(value => {
+    const first = !context; context = value;
+    words = translations[value.locale.split('-')[0]] || translations.en;
+    document.documentElement.lang = value.locale; document.documentElement.dir = value.locale.startsWith('he') ? 'rtl' : 'ltr';
+    document.documentElement.dataset.appearance = value.appearance;
+    for (const [variable, key] of Object.entries({ '--bg':'background', '--tile':'surface', '--ink':'text', '--muted':'muted', '--line':'border', '--focus':'focus' })) {
+      const color = value.colors?.[key]; if (color && CSS.supports('color', color)) document.documentElement.style.setProperty(variable, color);
+    }
+    document.querySelector('[role=tablist]').setAttribute('aria-label', words[22]);
+    $('text').placeholder = words[3]; $('text').setAttribute('aria-label', words[22]);
+    $('insert').textContent = words[8]; $('noSession').textContent = words[7];
+    say('saved', shown.saved);
+    $('trash').relabel(); controls(); tabs(); render();
+    if (first) { read(); list(); }
+  });
+})();
+</script>
