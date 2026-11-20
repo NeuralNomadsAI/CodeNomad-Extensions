@@ -111,7 +111,13 @@ THE SOFTWARE. -->
     $('listView').setAttribute('aria-labelledby', view === 'session' ? 'project' : view);
   }
   // Back on Session, a note that could not be read yet is read again.
-  function select(next) { if (next === view) return; view = next; tabs(); render(); if (view === 'session' && $('text').readOnly) read(); }
+  // Back on Session, a note that could not be read yet is read again; Project and Orphans reread the list
+  // (titles change without a notes event) while showing what they have.
+  function select(next) {
+    if (next === view) return;
+    view = next; tabs(); render();
+    if (view === 'session') { if ($('text').readOnly) read(); } else list();
+  }
 
   // Session note: read-only until its first read, saved shortly after typing stops and on blur.
   async function read() {
@@ -190,7 +196,11 @@ THE SOFTWARE. -->
     say('saved', result === 'added' ? 21 : result === 'too-long' ? 25 : 16);
   };
   // Confirmation holds only while no other window changed the note since it was armed.
-  confirming($('trash'), () => { $('text').value = ''; dirty = true; epoch++; controls(); $('text').focus(); save(); },
+  // From the keyboard, the editor takes focus once the key is released: a held key never types into it.
+  confirming($('trash'), event => {
+    $('text').value = ''; dirty = true; epoch++; controls(); save();
+    if (event?.detail === 0) addEventListener('keyup', () => $('text').focus(), { once: true }); else $('text').focus();
+  },
     { version: () => remote, key: 'session', stale: () => say('saved', 23) });
 
   // Project and orphan lists: every note of the project, newest first. A note that moves between
@@ -262,7 +272,12 @@ THE SOFTWARE. -->
         more.setAttribute('aria-label', `${words[26]} — ${note.title || words[14]}`); more.title = words[26]; more.onclick = toggle;
         button.title = words[15];
         // The host shows the conversation, the displayed one included (out of a file preview, say).
-        button.onclick = () => {
+        button.onclick = async () => {
+          // Opening another conversation closes this panel: an unsaved draft is saved first, else it stays in view.
+          if (!current && dirty) {
+            await save();
+            if (dirty) { select('session'); $('text').focus(); return; }
+          }
           // A conversation that cannot be opened from here still shows its whole note; the displayed one
           // switches to Session once the host accepted.
           api.notes.open(note.sessionID).then(result => {
@@ -307,8 +322,8 @@ THE SOFTWARE. -->
     const arm = () => { button.dataset.armed = '1'; button.textContent = words[10]; button.setAttribute('aria-label', name(words[10])); };
     // A held key repeats: only distinct presses arm and confirm.
     button.onkeydown = event => { if (event.repeat && (event.key === 'Enter' || event.key === ' ')) event.preventDefault(); };
-    button.onclick = () => {
-      if (armed?.key === key) { const current = armed.version === version(); disarm(); if (current) run(); else stale(); return; }
+    button.onclick = event => {
+      if (armed?.key === key) { const current = armed.version === version(); disarm(); if (current) run(event); else stale(); return; }
       disarm();
       armed = { key, version: version(), idle, timer: setTimeout(disarm, 3000) };
       arm();
