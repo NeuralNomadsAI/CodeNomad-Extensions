@@ -30,6 +30,7 @@ const server = createServer((_request, response) => {
     window.lists = []; window.opens = []; window.unavailable = null; window.worktreeOpens = []; window.openAnswer = 'confirming'; window.hold = null;
     window.links = [{ kind: 'issue', number: 101, branch: 'issue-101', worktree: true, current: false }];
     window.changed = () => channel.postMessage({ type: 'worktrees:changed' });
+    window.setLocale = locale => { context = { ...context, locale }; channel.postMessage({ type: 'context', context }); };
     const repository = { provider: 'gitlab', host: 'gitlab.com', path: 'team/app', webUrl: 'https://gitlab.com/team/app', access: 'anonymous' };
     const item = (kind, number, extra = {}) => ({ kind, number, title: (kind === 'issue' ? 'Issue ' : 'Change ') + number, state: 'open', draft: false,
       author: 'dev', labels: ['bug'], updatedAt: '2026-10-29T12:00:00Z', url: repository.webUrl + '/-/' + number, ...extra });
@@ -82,18 +83,30 @@ try {
   assert.deepEqual(await view.evaluate(() => window.worktreeOpens), [{ kind: 'issue', number: 101 }])
   await view.evaluate(() => { window.openAnswer = 'conflict' })
   await frame.getByRole('button', { name: 'Ouvrir dans un worktree — #200' }).click()
-  await frame.getByText('Une branche de ce nom existe déjà et n’est pas liée à cet élément.').waitFor()
+  // The answer shows under its own row, so a click far down the list sees it.
+  await frame.locator('li').filter({ hasText: '#200' }).locator('.notice').filter({ hasText: 'Une branche de ce nom existe déjà et n’est pas liée à cet élément.' }).waitFor()
+  // A language change translates mounted rows and answers in place.
+  await view.evaluate(() => window.setLocale('he-IL'))
+  await frame.locator('li').filter({ hasText: '#200' }).locator('.notice').filter({ hasText: 'כבר קיים ענף' }).waitFor()
+  await frame.getByRole('button', { name: 'פתיחה ב-worktree — #200' }).waitFor()
+  await view.evaluate(() => window.setLocale('fr-FR'))
+  await frame.getByRole('button', { name: 'Ouvrir dans un worktree — #200' }).waitFor()
   await view.evaluate(() => { window.links = [{ ...window.links[0], current: true }]; window.changed() })
   await frame.getByRole('button', { name: 'Cette conversation est déjà dans ce worktree. — #101', disabled: true }).waitFor()
   // An unlisted item the exact lookup finds current is announced, not silent.
   await view.evaluate(() => { window.openAnswer = 'current' })
   await frame.getByRole('button', { name: 'Ouvrir dans un worktree — #200' }).click()
-  await frame.locator('#notice').filter({ hasText: 'Cette conversation est déjà dans ce worktree.' }).waitFor()
+  await frame.locator('li').filter({ hasText: '#200' }).locator('.notice').filter({ hasText: 'Cette conversation est déjà dans ce worktree.' }).waitFor()
   // Link changes keep the focused control and the shown rows.
   await frame.getByRole('button', { name: 'Ouvrir dans un worktree — #200' }).focus()
   await view.evaluate(() => { window.links = [...window.links, { kind: 'issue', number: 200, branch: 'issue-200', worktree: false, current: false }]; window.changed() })
   await frame.locator('.item').nth(1).filter({ hasText: 'issue-200' }).waitFor()
   assert.equal(await frame.locator('body').evaluate(() => document.activeElement?.className), 'worktree')
+  await view.evaluate(() => { window.links = window.links.map(link => link.number === 200 ? { ...link, current: true } : link); window.changed() })
+  await frame.locator('li').filter({ hasText: '#200' }).locator('.worktree:disabled').waitFor()
+  assert.equal(await frame.locator('body').evaluate(() => document.activeElement?.className), 'item')
+  await view.evaluate(() => { window.links = window.links.map(link => link.number === 200 ? { ...link, current: false } : link); window.changed() })
+  await frame.locator('li').filter({ hasText: '#200' }).locator('.worktree:enabled').waitFor()
   // A reply arriving after the list changed does not overwrite it.
   await view.evaluate(() => { window.hold = true; window.openAnswer = 'conflict' })
   await frame.getByRole('button', { name: 'Ouvrir dans un worktree — #200' }).click()
@@ -102,7 +115,7 @@ try {
   await frame.getByText('Aucun élément ouvert ne correspond.').waitFor()
   await view.evaluate(() => { window.release(); window.hold = null })
   await view.waitForTimeout(200)
-  assert.equal(await frame.locator('#notice').textContent(), '')
+  assert.equal(await frame.locator('.notice:not(:empty)').count(), 0)
   assert.equal(await frame.locator('.item').count(), 0, 'no earlier rows come back')
   await frame.getByRole('searchbox').fill('')
   await frame.locator('.item').nth(1).waitFor()

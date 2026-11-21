@@ -33,10 +33,11 @@ THE SOFTWARE. -->
   [role=tab] + [role=tab] { border-inline-start:1px solid var(--line); }
   [role=tab][aria-selected=true] { background:var(--tile); color:var(--ink); font-weight:600; }
   input[type=search] { width:100%; min-height:28px; padding:4px 8px; border:1px solid var(--line); background:transparent; }
-  #status, #notice { color:var(--muted); line-height:1.5; }
-  #notice:empty { display:none; }
+  #status, .notice { color:var(--muted); line-height:1.5; }
+  .notice { flex-basis:100%; margin:0 4px 6px; }
+  .notice:empty { display:none; }
   ul { list-style:none; margin:8px 0 0; padding:0; }
-  li { display:flex; }
+  li { display:flex; flex-wrap:wrap; }
   li + li { border-top:1px solid var(--line); }
   .worktree { flex:none; width:32px; border:0; color:var(--muted); }
   .worktree:hover { background:var(--tile); color:var(--ink); }
@@ -54,7 +55,7 @@ THE SOFTWARE. -->
 <header><h1>Contribute</h1><span id="repository"></span><button id="refresh">↻</button></header>
 <div role="tablist"><button role="tab" id="issue" aria-selected="true"></button><button role="tab" id="pullRequest" aria-selected="false"></button></div>
 <input id="search" type="search" spellcheck="false" autocomplete="off">
-<p id="status" role="status"></p><p id="notice" role="status"></p><ul id="items"></ul>
+<p id="status" role="status"></p><ul id="items"></ul>
 <footer><button id="previous" hidden></button><button id="next" hidden></button></footer>
 <script>
 (() => {
@@ -93,13 +94,11 @@ THE SOFTWARE. -->
   function render(items) {
     $('items').replaceChildren(...items.map(item => {
       const row = document.createElement('li'), button = document.createElement('button');
-      button.type = 'button'; button.className = 'item'; button.title = `${words[14]} — ${item.url}`;
-      const title = document.createElement('span'), number = document.createElement('span'), meta = document.createElement('span');
-      title.className = 'title'; number.className = 'number'; meta.className = 'meta';
+      button.type = 'button'; button.className = 'item';
+      const title = document.createElement('span'), number = document.createElement('bdi'), meta = document.createElement('span');
+      title.className = 'title'; number.className = 'number'; meta.className = 'meta'; number.dir = 'ltr';
       number.textContent = `${item.kind === 'issue' ? '#' : (repository?.provider === 'gitlab' ? '!' : '#')}${item.number}`;
       title.append(number, ' ', item.title);
-      const state = item.state === 'open' ? (item.draft ? words[15] : '') : words[item.state === 'merged' ? 17 : 16];
-      const details = [item.author && '@' + item.author, dates().format(new Date(item.updatedAt)), state];
       button.append(title, meta);
       if (item.labels.length) {
         const labels = document.createElement('span'); labels.className = 'labels';
@@ -108,23 +107,32 @@ THE SOFTWARE. -->
       }
       button.onclick = () => window.codenomad.workItems.open(item.kind, item.number).catch(() => {});
       row.append(button);
-      // The host confirms and creates or moves; the panel only asks. Its answer goes to the
-      // notice line, and only while the same list is shown.
-      const open = window.codenomad.worktrees?.open && document.createElement('button');
+      // The host confirms and creates or moves; the panel only asks. Its answer shows under
+      // this row, kept as a code so a language change translates it again.
+      const open = window.codenomad.worktrees?.open && document.createElement('button'), notice = document.createElement('p');
+      let outcome;
+      notice.className = 'notice'; notice.setAttribute('role', 'status');
       if (open) {
         open.type = 'button'; open.className = 'worktree'; open.innerHTML = branchIcon;
         open.onclick = () => {
-          const epoch = generation, answer = text => { if (epoch === generation) $('notice').textContent = text; };
-          answer('');
-          window.codenomad.worktrees.open(item.kind, item.number).then(result => answer(outcomes[result] ? words[outcomes[result]] : ''), () => answer(words[22]));
+          outcome = undefined; row.decorate();
+          window.codenomad.worktrees.open(item.kind, item.number)
+            .then(result => answer(outcomes[result]), () => answer(22));
         };
-        row.append(open);
+        row.append(open, notice);
       }
-      // Link decorations change in place, so focus stays where it is.
+      const answer = index => { outcome = index; row.decorate(); };
+      // Every translated text, and the link state, is set here, in place: language and link
+      // changes keep the rows and the focus.
       row.decorate = () => {
         const link = links.get(item.kind + ':' + item.number);
-        meta.textContent = [...details, link?.branch].filter(Boolean).join(' · ');
+        const state = item.state === 'open' ? (item.draft ? words[15] : '') : words[item.state === 'merged' ? 17 : 16];
+        button.title = `${words[14]} — ${item.url}`;
+        meta.textContent = [item.author && '@' + item.author, dates().format(new Date(item.updatedAt)), state, link?.branch].filter(Boolean).join(' · ');
+        notice.textContent = outcome === undefined ? '' : words[outcome];
         if (!open) return;
+        // A focused button that becomes disabled hands its focus to the item.
+        if (link?.current && document.activeElement === open) button.focus();
         open.disabled = Boolean(link?.current);
         open.title = link?.current ? words[20] : words[19] + (link?.worktree ? ` (${link.branch})` : '');
         open.setAttribute('aria-label', `${open.title} — ${number.textContent}`);
@@ -135,7 +143,7 @@ THE SOFTWARE. -->
   }
   async function load(fresh = false) {
     const epoch = ++generation, query = $('search').value.trim();
-    $('refresh').disabled = true; $('status').textContent = words[4]; $('notice').textContent = ''; $('items').replaceChildren(); $('previous').hidden = $('next').hidden = true;
+    $('refresh').disabled = true; $('status').textContent = words[4]; $('items').replaceChildren(); $('previous').hidden = $('next').hidden = true;
     try {
       if (!window.codenomad.workItems) { $('status').textContent = words[11]; return; }
       const result = await window.codenomad.workItems.list({ kind, query, page, fresh });
@@ -190,6 +198,7 @@ THE SOFTWARE. -->
     $('previous').textContent = words[12]; $('next').textContent = words[13];
     document.querySelector('[role=tablist]').setAttribute('aria-label', 'Contribute');
     tabs(); header();
+    for (const row of $('items').children) row.decorate();
     // Work items belong to the project, not the session: load once per mount.
     if (first) { worktrees(); load().then(() => count('pullRequest')); }
   });
