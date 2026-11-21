@@ -34,8 +34,9 @@ THE SOFTWARE. -->
   [role=tab][aria-selected=true] { background:var(--tile); color:var(--ink); font-weight:600; }
   input[type=search] { width:100%; min-height:28px; padding:4px 8px; border:1px solid var(--line); background:transparent; }
   #status, .notice { color:var(--muted); line-height:1.5; }
-  .notice { flex-basis:100%; margin:0 4px 6px; }
-  .notice:empty { display:none; }
+  /* Always rendered, so screen readers announce its first message. */
+  .notice { flex-basis:100%; margin:0; }
+  .notice:not(:empty) { margin:0 4px 6px; }
   ul { list-style:none; margin:8px 0 0; padding:0; }
   li { display:flex; flex-wrap:wrap; }
   li + li { border-top:1px solid var(--line); }
@@ -77,6 +78,9 @@ THE SOFTWARE. -->
   };
   const reasons = { no_remote:6, unsupported_host:7, sign_in:8, rate_limited:9 };
   let words = translations.en, context, kind = 'issue', page = 1, generation = 0, timer, totals = {}, repository, links = new Map();
+  // The list status is kept as a string index, so a language change translates it again.
+  let statusIndex;
+  const status = index => { statusIndex = index; $('status').textContent = index === undefined ? '' : words[index]; };
   const outcomes = { current:20, conflict:21, unavailable:22, 'no-session':23, busy:24 };
   const branchIcon = '<svg viewBox="0 0 16 16" aria-hidden="true"><circle cx="4" cy="3.5" r="1.6"/><circle cx="4" cy="12.5" r="1.6"/><circle cx="12" cy="5" r="1.6"/><path d="M4 5.1v5.8M12 6.6c0 3-8 2-8 4.3"/></svg>';
   const dates = () => new Intl.DateTimeFormat(context?.locale || 'en', { dateStyle:'medium' });
@@ -143,18 +147,18 @@ THE SOFTWARE. -->
   }
   async function load(fresh = false) {
     const epoch = ++generation, query = $('search').value.trim();
-    $('refresh').disabled = true; $('status').textContent = words[4]; $('items').replaceChildren(); $('previous').hidden = $('next').hidden = true;
+    $('refresh').disabled = true; status(4); $('items').replaceChildren(); $('previous').hidden = $('next').hidden = true;
     try {
-      if (!window.codenomad.workItems) { $('status').textContent = words[11]; return; }
+      if (!window.codenomad.workItems) { status(11); return; }
       const result = await window.codenomad.workItems.list({ kind, query, page, fresh });
       if (epoch !== generation) return;
-      if (result.status !== 'ok') { repository = undefined; header(); $('status').textContent = words[reasons[result.reason] ?? 10]; return; }
+      if (result.status !== 'ok') { repository = undefined; header(); status(reasons[result.reason] ?? 10); return; }
       repository = result.repository; header();
       if (!query && result.total !== undefined) { totals[kind] = result.total; tabs(); }
       render(result.items);
-      $('status').textContent = result.items.length ? '' : words[5];
+      status(result.items.length ? undefined : 5);
       $('previous').hidden = page <= 1; $('next').hidden = !result.hasMore;
-    } catch { if (epoch === generation) $('status').textContent = words[10]; }
+    } catch { if (epoch === generation) status(10); }
     finally { if (epoch === generation) $('refresh').disabled = false; }
   }
   // Items with a branch CodeNomad linked, and whether the displayed conversation is in its worktree.
@@ -197,7 +201,7 @@ THE SOFTWARE. -->
     $('search').placeholder = words[3]; $('search').setAttribute('aria-label', words[3]);
     $('previous').textContent = words[12]; $('next').textContent = words[13];
     document.querySelector('[role=tablist]').setAttribute('aria-label', 'Contribute');
-    tabs(); header();
+    tabs(); header(); status(statusIndex);
     for (const row of $('items').children) row.decorate();
     // Work items belong to the project, not the session: load once per mount.
     if (first) { worktrees(); load().then(() => count('pullRequest')); }

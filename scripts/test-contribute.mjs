@@ -83,7 +83,8 @@ try {
   assert.deepEqual(await view.evaluate(() => window.worktreeOpens), [{ kind: 'issue', number: 101 }])
   await view.evaluate(() => { window.openAnswer = 'conflict' })
   await frame.getByRole('button', { name: 'Ouvrir dans un worktree — #200' }).click()
-  // The answer shows under its own row, so a click far down the list sees it.
+  // The answer shows under its own row, so a click far down the list sees it; its live region exists before.
+  assert.equal(await frame.locator('li').filter({ hasText: '#101' }).locator('.notice').evaluate(element => getComputedStyle(element).display), 'block')
   await frame.locator('li').filter({ hasText: '#200' }).locator('.notice').filter({ hasText: 'Une branche de ce nom existe déjà et n’est pas liée à cet élément.' }).waitFor()
   // A language change translates mounted rows and answers in place.
   await view.evaluate(() => window.setLocale('he-IL'))
@@ -138,6 +139,11 @@ try {
   await view.evaluate(() => { window.unavailable = 'sign_in' })
   await frame.getByRole('button', { name: 'Actualiser' }).click()
   await frame.getByText(/Dépôt privé ou inconnu/).waitFor()
+  // The list status follows a language change without a new read.
+  const reads = await view.evaluate(() => window.lists.length)
+  await view.evaluate(() => window.setLocale('he-IL'))
+  await frame.getByText(/מאגר פרטי/).waitFor()
+  assert.equal(await view.evaluate(() => window.lists.length), reads)
   assert.equal((await view.evaluate(() => window.lists)).at(-2).fresh, true, 'Refresh bypasses the host cache')
   console.log('Contribute addon checks passed')
 } finally {
