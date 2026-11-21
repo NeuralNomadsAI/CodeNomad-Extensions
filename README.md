@@ -128,7 +128,7 @@ host. API 4 requires `session.context` plus any non-empty subset of
 `panel.preferences`, `panel.notes`, `repository.workItems.read`, `repository.worktrees.read`
 (only with `repository.workItems.read`) and `repository.worktrees.write` (only with
 `repository.worktrees.read`), and installs only on a CodeNomad host supporting extension
-API 4. No API permits local file access, network access or native commands.
+API 4 and every declared permission. No API permits local file access, network access or native commands.
 [CONTRIBUTING.md](CONTRIBUTING.md) describes each permission and how API 4 addons
 are tested.
 

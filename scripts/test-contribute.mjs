@@ -118,6 +118,11 @@ try {
   // A pending request ignores further clicks.
   for (let click = 0; click < 3; click++) await frame.getByRole('button', { name: 'Ouvrir dans un worktree — #200' }).click()
   assert.equal(await view.evaluate(() => window.worktreeOpens.length), 4)
+  // Rows rendered while it is pending show it too.
+  await frame.getByRole('tab', { name: 'Pull requests (7)' }).click()
+  await frame.locator('li').filter({ hasText: '!101' }).locator('.worktree[aria-busy=true]').waitFor()
+  await frame.getByRole('tab', { name: 'Issues (41)' }).click()
+  await frame.locator('.item').nth(1).waitFor()
   await frame.getByRole('searchbox').fill('none')
   await frame.getByText('Aucun élément ouvert ne correspond.').waitFor()
   await view.evaluate(() => { window.release(); window.hold = null })

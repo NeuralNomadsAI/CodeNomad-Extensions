@@ -82,6 +82,7 @@ THE SOFTWARE. -->
   // The list status is kept as a string index, so a language change translates it again.
   // One worktree request at a time: repeated clicks never fill the bridge's request limit.
   let statusIndex, opening = false;
+  const pending = value => { opening = value; for (const row of $('items').children) row.decorate(); };
   const status = index => { statusIndex = index; $('status').textContent = index === undefined ? '' : words[index]; };
   const outcomes = { current:20, conflict:21, unavailable:22, 'no-session':23, busy:24 };
   const branchIcon = '<svg viewBox="0 0 16 16" aria-hidden="true"><circle cx="4" cy="3.5" r="1.6"/><circle cx="4" cy="12.5" r="1.6"/><circle cx="12" cy="5" r="1.6"/><path d="M4 5.1v5.8M12 6.6c0 3-8 2-8 4.3"/></svg>';
@@ -122,10 +123,10 @@ THE SOFTWARE. -->
         open.type = 'button'; open.className = 'worktree'; open.innerHTML = branchIcon;
         open.onclick = () => {
           if (opening) return;
-          opening = true; open.setAttribute('aria-busy', 'true'); outcome = undefined; row.decorate();
+          outcome = undefined; pending(true);
           window.codenomad.worktrees.open(item.kind, item.number)
             .then(result => answer(outcomes[result]), () => answer(22))
-            .finally(() => { opening = false; open.removeAttribute('aria-busy'); });
+            .finally(() => pending(false));
         };
         row.append(open, notice);
       }
@@ -142,6 +143,8 @@ THE SOFTWARE. -->
         const message = outcome === undefined ? '' : words[outcome];
         if (notice.textContent !== message) notice.textContent = message;
         if (!open) return;
+        // Every worktree button shows the pending request, rows rendered meanwhile included.
+        if (opening) open.setAttribute('aria-busy', 'true'); else open.removeAttribute('aria-busy');
         // A focused button that becomes disabled hands its focus to the item.
         if (link?.current && document.activeElement === open) button.focus();
         open.disabled = Boolean(link?.current);
