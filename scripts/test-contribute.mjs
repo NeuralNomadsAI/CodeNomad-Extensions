@@ -10,12 +10,15 @@ const checkout = path.resolve(process.argv[2]), require = createRequire(path.joi
 const { chromium } = require('playwright'), { tsImport } = require('tsx/esm/api')
 const { panelExtensionDocument } = await tsImport(pathToFileURL(path.join(checkout, 'packages/ui/src/components/panel-extensions/frame-document.ts')).href, import.meta.url)
 const html = await readFile(new URL('../extensions/contribute/panel.html', import.meta.url), 'utf8')
+const { apiVersion, permissions } = JSON.parse(await readFile(new URL('../extensions/contribute/manifest.json', import.meta.url), 'utf8'))
 const browser = await chromium.launch({ executablePath: process.env.CODENOMAD_BROWSER_PATH || undefined })
 const server = createServer((_request, response) => {
   response.setHeader('Content-Type', 'text/html; charset=utf-8')
-  response.end(`<iframe title="Contribute" sandbox="allow-scripts" style="width:100%;height:calc(100vh - 16px);border:0" srcdoc="${panelExtensionDocument(html, 'test', 3).replaceAll('&', '&amp;').replaceAll('"', '&quot;').replaceAll('<', '&lt;')}" onload="init(this)"></iframe><script>
-    let channel, context = { apiVersion: 3, sessionId: 's', locale: 'fr-FR', appearance: 'dark', colors: { background: '#343a43', surface: '#252a31' } };
-    window.lists = []; window.opens = []; window.unavailable = null;
+  response.end(`<iframe title="Contribute" sandbox="allow-scripts" style="width:100%;height:calc(100vh - 16px);border:0" srcdoc="${panelExtensionDocument(html, 'test', apiVersion, permissions).replaceAll('&', '&amp;').replaceAll('"', '&quot;').replaceAll('<', '&lt;')}" onload="init(this)"></iframe><script>
+    let channel, context = { apiVersion: ${apiVersion}, sessionId: 's', locale: 'fr-FR', appearance: 'dark', colors: { background: '#343a43', surface: '#252a31' } };
+    window.lists = []; window.opens = []; window.unavailable = null; window.worktreeOpens = []; window.openAnswer = 'confirming';
+    window.links = [{ kind: 'issue', number: 101, branch: 'issue-101', worktree: true, current: false }];
+    window.changed = () => channel.postMessage({ type: 'worktrees:changed' });
     const repository = { provider: 'gitlab', host: 'gitlab.com', path: 'team/app', webUrl: 'https://gitlab.com/team/app', access: 'anonymous' };
     const item = (kind, number, extra = {}) => ({ kind, number, title: (kind === 'issue' ? 'Issue ' : 'Change ') + number, state: 'open', draft: false,
       author: 'dev', labels: ['bug'], updatedAt: '2026-10-29T12:00:00Z', url: repository.webUrl + '/-/' + number, ...extra });
@@ -23,6 +26,12 @@ const server = createServer((_request, response) => {
       const connection = new MessageChannel(); channel = connection.port1;
       channel.onmessage = e => {
         if (e.data.type === 'ready') { channel.postMessage({ type: 'context', context }); return; }
+        if (e.data.type === 'api4:request' && e.data.capability === 'worktrees') {
+          const { id, method, input } = e.data;
+          if (method === 'open') window.worktreeOpens.push(input);
+          channel.postMessage({ type: 'api4:result', id, result: method === 'list' ? window.links : window.openAnswer });
+          return;
+        }
         if (e.data.type !== 'workItems:request') return;
         const { id, method, input } = e.data;
         let result;
@@ -53,6 +62,17 @@ try {
   await frame.locator('.item').first().click()
   await view.waitForFunction(() => window.opens.length === 1)
   assert.deepEqual(await view.evaluate(() => window.opens), [{ kind: 'issue', number: 101 }])
+
+  // Worktrees: the linked branch shows, the button only asks the host, whose answers show as status.
+  await frame.locator('.item').first().filter({ hasText: 'issue-101' }).waitFor()
+  await frame.getByRole('button', { name: 'Ouvrir dans un worktree (issue-101) — #101' }).click()
+  await view.waitForFunction(() => window.worktreeOpens.length === 1)
+  assert.deepEqual(await view.evaluate(() => window.worktreeOpens), [{ kind: 'issue', number: 101 }])
+  await view.evaluate(() => { window.openAnswer = 'conflict' })
+  await frame.getByRole('button', { name: 'Ouvrir dans un worktree — #200' }).click()
+  await frame.getByText('Une branche de ce nom existe déjà et n’est pas liée à cet élément.').waitFor()
+  await view.evaluate(() => { window.links = [{ ...window.links[0], current: true }]; window.changed() })
+  await frame.getByRole('button', { name: 'Cette conversation est déjà dans ce worktree. — #101', disabled: true }).waitFor()
 
   await frame.getByRole('tab', { name: 'Pull requests (7)' }).click()
   await frame.locator('.item').first().filter({ hasText: '!101 Change 101' }).waitFor()
