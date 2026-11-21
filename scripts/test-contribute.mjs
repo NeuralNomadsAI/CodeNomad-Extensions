@@ -98,6 +98,9 @@ try {
   await view.evaluate(() => { window.openAnswer = 'current' })
   await frame.getByRole('button', { name: 'Ouvrir dans un worktree — #200' }).click()
   await frame.locator('li').filter({ hasText: '#200' }).locator('.notice').filter({ hasText: 'Cette conversation est déjà dans ce worktree.' }).waitFor()
+  // A new inventory that does not list it as current clears that answer.
+  await view.evaluate(() => window.changed())
+  await frame.locator('li').filter({ hasText: '#200' }).locator('.notice:empty').waitFor({ state: 'attached' })
   // Link changes keep the focused control and the shown rows.
   await frame.getByRole('button', { name: 'Ouvrir dans un worktree — #200' }).focus()
   await view.evaluate(() => { window.links = [...window.links, { kind: 'issue', number: 200, branch: 'issue-200', worktree: false, current: false }]; window.changed() })
@@ -112,6 +115,9 @@ try {
   await view.evaluate(() => { window.hold = true; window.openAnswer = 'conflict' })
   await frame.getByRole('button', { name: 'Ouvrir dans un worktree — #200' }).click()
   await view.waitForFunction(() => typeof window.release === 'function')
+  // A pending request ignores further clicks.
+  for (let click = 0; click < 3; click++) await frame.getByRole('button', { name: 'Ouvrir dans un worktree — #200' }).click()
+  assert.equal(await view.evaluate(() => window.worktreeOpens.length), 4)
   await frame.getByRole('searchbox').fill('none')
   await frame.getByText('Aucun élément ouvert ne correspond.').waitFor()
   await view.evaluate(() => { window.release(); window.hold = null })

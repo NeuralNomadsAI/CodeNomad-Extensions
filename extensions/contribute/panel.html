@@ -43,6 +43,7 @@ THE SOFTWARE. -->
   .worktree { flex:none; width:32px; border:0; color:var(--muted); }
   .worktree:hover { background:var(--tile); color:var(--ink); }
   .worktree:disabled { color:var(--focus); opacity:1; }
+  .worktree[aria-busy=true] { opacity:.5; cursor:progress; }
   .worktree svg { width:14px; height:14px; fill:none; stroke:currentColor; stroke-width:1.6; }
   .item { display:block; flex:1; min-width:0; padding:8px 4px; border:0; text-align:start; }
   .item:hover { background:var(--tile); }
@@ -79,7 +80,8 @@ THE SOFTWARE. -->
   const reasons = { no_remote:6, unsupported_host:7, sign_in:8, rate_limited:9 };
   let words = translations.en, context, kind = 'issue', page = 1, generation = 0, timer, totals = {}, repository, links = new Map();
   // The list status is kept as a string index, so a language change translates it again.
-  let statusIndex;
+  // One worktree request at a time: repeated clicks never fill the bridge's request limit.
+  let statusIndex, opening = false;
   const status = index => { statusIndex = index; $('status').textContent = index === undefined ? '' : words[index]; };
   const outcomes = { current:20, conflict:21, unavailable:22, 'no-session':23, busy:24 };
   const branchIcon = '<svg viewBox="0 0 16 16" aria-hidden="true"><circle cx="4" cy="3.5" r="1.6"/><circle cx="4" cy="12.5" r="1.6"/><circle cx="12" cy="5" r="1.6"/><path d="M4 5.1v5.8M12 6.6c0 3-8 2-8 4.3"/></svg>';
@@ -119,21 +121,26 @@ THE SOFTWARE. -->
       if (open) {
         open.type = 'button'; open.className = 'worktree'; open.innerHTML = branchIcon;
         open.onclick = () => {
-          outcome = undefined; row.decorate();
+          if (opening) return;
+          opening = true; open.setAttribute('aria-busy', 'true'); outcome = undefined; row.decorate();
           window.codenomad.worktrees.open(item.kind, item.number)
-            .then(result => answer(outcomes[result]), () => answer(22));
+            .then(result => answer(outcomes[result]), () => answer(22))
+            .finally(() => { opening = false; open.removeAttribute('aria-busy'); });
         };
         row.append(open, notice);
       }
       const answer = index => { outcome = index; row.decorate(); };
       // Every translated text, and the link state, is set here, in place: language and link
       // changes keep the rows and the focus.
-      row.decorate = () => {
+      // `refreshed`: a new inventory, after which an earlier `current` answer no longer holds unless listed.
+      row.decorate = (refreshed = false) => {
         const link = links.get(item.kind + ':' + item.number);
+        if (refreshed && outcome === 20 && !link?.current) outcome = undefined;
         const state = item.state === 'open' ? (item.draft ? words[15] : '') : words[item.state === 'merged' ? 17 : 16];
         button.title = `${words[14]} — ${item.url}`;
         meta.textContent = [item.author && '@' + item.author, dates().format(new Date(item.updatedAt)), state, link?.branch].filter(Boolean).join(' · ');
-        notice.textContent = outcome === undefined ? '' : words[outcome];
+        const message = outcome === undefined ? '' : words[outcome];
+        if (notice.textContent !== message) notice.textContent = message;
         if (!open) return;
         // A focused button that becomes disabled hands its focus to the item.
         if (link?.current && document.activeElement === open) button.focus();
@@ -166,7 +173,7 @@ THE SOFTWARE. -->
     if (!window.codenomad.worktrees) return;
     const result = await window.codenomad.worktrees.list().catch(() => 'unavailable');
     links = new Map(Array.isArray(result) ? result.map(link => [link.kind + ':' + link.number, link]) : []);
-    for (const row of $('items').children) row.decorate();
+    for (const row of $('items').children) row.decorate(true);
   }
   window.codenomad.worktrees?.onChanged(worktrees);
   // The other tab's open total, so both tabs show their counts as on the forge.

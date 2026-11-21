@@ -57,7 +57,7 @@ confirmation, `issue-N` or `pr-N`, with the displayed conversation moved there).
 This addon requires **extension API 4** with `repository.workItems.read`,
 `repository.worktrees.read` and `repository.worktrees.write` (CodeNomad PR #1600). The host reads the repository through the user's
 signed-in `gh`, `glab` or `tea`, or anonymously for public repositories on the
-public forges, and stores no token; the addon receives only the repository name
+public forges, and stores no token; the addon receives only the repository name,
 bounded pages of item summaries and their web URLs, and the branches CodeNomad
 linked to them, with their worktree status. It has no
 filesystem, network, token or command access and changes nothing on the forge.
