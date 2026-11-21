@@ -41,18 +41,18 @@
       "manifest": {
         "id": "neuralnomads.contribute",
         "name": "Contribute",
-        "version": "1.0.0",
-        "apiVersion": 3,
+        "version": "1.1.0",
+        "apiVersion": 4,
         "author": "NeuralNomadsAI",
         "license": "MIT",
         "repository": "https://github.com/NeuralNomadsAI/CodeNomad-Extensions",
-        "permissions": ["session.context", "repository.workItems.read"]
+        "permissions": ["session.context", "repository.workItems.read", "repository.worktrees.read", "repository.worktrees.write"]
       },
-      "description": "Browse the project repository's open issues and pull requests on GitHub, GitLab or Gitea/Forgejo with totals, search, #number lookup and labels, and open them in the browser. Requires extension API 3 and explicit read consent; reads use your signed-in gh, glab or tea, or anonymous access to public repositories; no filesystem, token or command access.",
-      "digest": "c7e3e7217ea239136f35d3ccd94a8a0ad2a49e9b0d6449856ee0e61a93cfb8f1",
+      "description": "Browse the project repository's open issues and pull requests on GitHub, GitLab or Gitea/Forgejo, and open one in its own worktree: CodeNomad confirms, creates the issue or pull request branch (forks included) and moves the conversation there. Requires the extension API 4 worktree permissions; reads use your signed-in gh, glab or tea, or anonymous access to public repositories; no filesystem, token or command access.",
+      "digest": "1c53b687e53427b77d72a326435128aa1ab854b311684e4b6e263f16334c2bf4",
       "release": {
-        "tag": "contribute-v1.0.0",
-        "asset": "neuralnomads.contribute-1.0.0.zip"
+        "tag": "contribute-v1.1.0",
+        "asset": "neuralnomads.contribute-1.1.0.zip"
       }
     },
     {
