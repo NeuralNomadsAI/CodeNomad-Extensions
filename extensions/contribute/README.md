@@ -17,9 +17,9 @@ Previous/Next browse pages; Refresh reloads past the host's short cache.
 
 The branch button beside each row asks CodeNomad to open the item in a worktree.
 CodeNomad shows its own confirmation, then creates `issue-N` from the displayed
-conversation's checkout or `pr-N` at the pull request's head (forks included),
-a worktree for it, and moves the displayed conversation family there; an item
-with a worktree only moves it. Rows show the linked branch (such as `pr-7`), and the
+conversation's checkout or `pr-N` at the pull request's head (forks included)
+when the item has no linked branch yet, reuses its worktree or creates one, and
+moves the displayed conversation family there. Rows show the linked branch (such as `pr-7`), and the
 button is highlighted when the conversation is already in that worktree.
 CodeNomad never forces or moves an existing branch; a `pr-N` branch has no
 upstream, so push it with your usual Git command.
@@ -29,7 +29,8 @@ GitHub, GitLab (merge requests appear as pull requests, numbered `!n`) and
 Gitea/Forgejo are supported. CodeNomad reads them through the `gh`, `glab` or
 `tea` CLI you already signed in to, or anonymously for public repositories on
 github.com, gitlab.com, codeberg.org and gitea.com; a self-hosted forge needs
-its CLI signed in to it. The addon sees only the repository name and the items:
+its CLI signed in to it. The addon sees only the repository name, the items, and the branch CodeNomad
+linked to each item with whether a worktree holds it:
 no folder, remote URL, token, file, network or command access. It never names a
 branch, remote or revision, creates nothing without CodeNomad's confirmation and
 changes nothing on the forge.
