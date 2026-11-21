@@ -50,14 +50,17 @@ node scripts/test-mcp-assets.mjs /absolute/path/to/CodeNomad
 
 `extensions/contribute/` lists the project repository's open issues and pull
 requests on GitHub, GitLab or Gitea/Forgejo, with open totals, search, `#number`
-lookup, labels and paging; selecting an item opens its page in the browser.
+lookup, labels and paging; selecting an item opens its page in the browser, and
+its branch button asks CodeNomad to open it in a worktree (after CodeNomad's own
+confirmation, `issue-N` or `pr-N`, with the displayed conversation moved there).
 
-This addon requires **extension API 3**, with explicit `repository.workItems.read`
-consent (CodeNomad PR #1191). The host reads the repository through the user's
+This addon requires **extension API 4** with `repository.workItems.read`,
+`repository.worktrees.read` and `repository.worktrees.write` (CodeNomad PR #1600). The host reads the repository through the user's
 signed-in `gh`, `glab` or `tea`, or anonymously for public repositories on the
-public forges, and stores no token; the addon receives only the repository name
-and bounded pages of items. It has no filesystem, network, token or command
-access and changes nothing on the forge.
+public forges, and stores no token; the addon receives only the repository name,
+bounded pages of item summaries and their web URLs, and the branches CodeNomad
+linked to them, with their worktree status. It has no
+filesystem, network, token or command access and changes nothing on the forge.
 
 ```sh
 python scripts/package.py extensions/contribute dist
@@ -122,8 +125,10 @@ for bounded pages of the project repository's issues and pull requests, read by 
 host. API 4 requires `session.context` plus any non-empty subset of
 `session.images.read`, `session.images.prompts` (only with `session.images.read`),
 `composer.prefill`, `images.conversation`, `opencode.designAgent`,
-`panel.preferences` and `panel.notes`, and installs only on a CodeNomad host supporting extension
-API 4. No API permits local file access, network access or native commands.
+`panel.preferences`, `panel.notes`, `repository.workItems.read`, `repository.worktrees.read`
+(only with `repository.workItems.read`) and `repository.worktrees.write` (only with
+`repository.worktrees.read`), and installs only on a CodeNomad host supporting extension
+API 4 and every declared permission. No API permits local file access, network access or native commands.
 [CONTRIBUTING.md](CONTRIBUTING.md) describes each permission and how API 4 addons
 are tested.
 

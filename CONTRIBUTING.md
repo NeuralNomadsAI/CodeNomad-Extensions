@@ -19,10 +19,16 @@
    the project's Images conversation), `opencode.designAgent` (CodeNomad provides
    its Design agent to OpenCode while the addon is enabled) and
    `panel.preferences` (one small JSON object per installed addon) and
-   `panel.notes` (one plain-text note per conversation, listed per project), each at most
+   `panel.notes` (one plain-text note per conversation, listed per project),
+   `repository.workItems.read` (API 3's work items), `repository.worktrees.read`
+   (items whose branch CodeNomad linked, with their worktree; only with
+   `repository.workItems.read`) and `repository.worktrees.write` (ask CodeNomad,
+   which confirms itself, to open an item in a worktree; only with
+   `repository.worktrees.read`), each at most
    once, in any order. Declare only the capabilities the panel uses; each one has
    its own install sentence. API 4 addons install only on a CodeNomad host
-   supporting extension API 4; other hosts list them as incompatible.
+   supporting extension API 4 and every permission they declare; other hosts list
+   them as incompatible.
 4. Publish a built ZIP with only root `manifest.json` and `panel.html`, not the
    repository source archive. Maximum ZIP/HTML size: 2 MiB; manifest: 4 KiB.
 5. Give every changed package a new semantic version and immutable GitHub Release
